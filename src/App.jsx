@@ -84,34 +84,41 @@ const AUTO_MODEL = {
 };
 
 async function callAI(messages, systemPrompt = "", modelKey = "GPT-4o") {
-  const modelMap = {
-    "GPT-4o": "openai-large", "GPT-4o-mini": "openai",
-    "Gemini Flash": "gemini", "Mistral": "mistral", "Llama 3.3": "llama"
+  const lastMsg = messages[messages.length - 1]?.content || "";
+  const fullPrompt = (systemPrompt ? systemPrompt + "\n\n" : "") + 
+    messages.map(m => (m.role === "user" ? "User: " : "Assistant: ") + m.content).join("\n");
+
+  // Provider 1: Pollinations GET (most reliable)
+  const tryPollinations = async (model) => {
+    const url = `https://text.pollinations.ai/${encodeURIComponent(fullPrompt)}?model=${model}&seed=${Date.now()%9999}`;
+    const r = await fetch(url, {signal: AbortSignal.timeout(15000)});
+    if (!r.ok) throw new Error(r.status);
+    const t = await r.text();
+    if (!t || t.length < 20) throw new Error("empty");
+    return t.trim();
   };
-  const models = ["openai-large", "openai", "mistral", "gemini", "llama"];
-  const primary = modelMap[modelKey] || "openai-large";
-  const toTry = [primary, ...models.filter(m => m !== primary)];
 
-  // Build a single prompt string from messages + system
-  const buildPrompt = (msgs, sys) => {
-    let p = sys ? sys + "\n\n" : "";
-    p += msgs.map(m => (m.role === "user" ? "User: " : "Assistant: ") + m.content).join("\n");
-    return encodeURIComponent(p);
+  // Provider 2: OpenRouter free models
+  const tryOpenRouter = async () => {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {"Content-Type":"application/json","Authorization":"Bearer free","HTTP-Referer":"https://finpulse-eight.vercel.app"},
+      body: JSON.stringify({model:"mistralai/mistral-7b-instruct:free", messages:[{role:"user",content:fullPrompt}], max_tokens:400}),
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    return d.choices?.[0]?.message?.content?.trim();
   };
 
-  const prompt = buildPrompt(messages, systemPrompt);
-
-  for (const model of toTry) {
-    try {
-      // Use GET endpoint - more reliable, no CORS issues
-      const url = `https://text.pollinations.ai/${prompt}?model=${model}&seed=${Math.floor(Math.random()*9999)}&json=false`;
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const text = await res.text();
-      if (text && text.trim().length > 10) return text.trim();
-    } catch(e) { continue; }
+  // Try all options
+  const pollinationsModels = ["openai-large","openai","mistral","llama","gemini"];
+  for (const model of pollinationsModels) {
+    try { const t = await tryPollinations(model); if(t) return t; } catch(e) { continue; }
   }
-  throw new Error("AI service temporarily busy — please try again in a moment");
+  try { const t = await tryOpenRouter(); if(t) return t; } catch(e) {}
+
+  throw new Error("AI service temporarily unavailable — please try again in a moment");
 }
 
 /* ═══════════════════════════════════════════════════════════════════
