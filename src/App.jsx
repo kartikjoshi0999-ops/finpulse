@@ -1207,7 +1207,14 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
      TAB: PORTFOLIO BUILDER
   ══════════════════════════════════════════════════════════ */
   function PortfolioTab(){
-    const f=pbForm,set=(k,v)=>setPbForm(p=>({...p,[k]:v}));
+    const f=pbForm;
+    const set=(k,v)=>setPbForm(p=>({...p,[k]:v}));
+    const numInput=(k)=>({
+      defaultValue:f[k],
+      key:k+f[k].toString().length, // only re-key when length changes significantly
+      onBlur:e=>set(k,e.target.value),
+      style:iSt,type:"number"
+    });
     const PROVS=["AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"];
     const RLBL=["","Very Conservative","Conservative","Slightly Conservative","Moderate-Low","Moderate","Moderate-High","Balanced Growth","Growth","Aggressive","Very Aggressive"];
     const PC=[T.green,T.blue,T.purple,T.orange,T.yellow,T.teal,T.red,T.pink,T.indigo];
@@ -1221,18 +1228,18 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
             🤖 AI-powered by <span style={{color:T.blue,fontWeight:600}}>Pollinations.ai</span> — 100% free, no API keys. Your data never leaves your browser. Choose your AI model for the analysis.
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 28px"}}>
-            <FF label="Your Age"><input style={iSt} type="number" min="18" max="80" value={f.age} onChange={e=>set("age",e.target.value)}/></FF>
+            <FF label="Your Age"><input {...numInput("age")} min="18" max="80"/></FF>
             <FF label="Province / Territory"><select style={sSt} value={f.province} onChange={e=>set("province",e.target.value)}>{PROVS.map(p=><option key={p} value={p}>{p}</option>)}</select></FF>
-            <FF label="Annual Income (CAD)" hint="Pre-tax gross income"><input style={iSt} type="number" min="0" value={f.income} onChange={e=>set("income",e.target.value)}/></FF>
+            <FF label="Annual Income (CAD)" hint="Pre-tax gross income"><input {...numInput("income")} min="0"/></FF>
             <FF label="Employment Type"><select style={sSt} value={f.jobType} onChange={e=>set("jobType",e.target.value)}><option value="employed">Full-time Employed</option><option value="parttime">Part-time</option><option value="selfemployed">Self-Employed</option><option value="contract">Contract / Freelance</option><option value="student">Student</option><option value="retired">Retired</option></select></FF>
             <FF label="Marital Status"><select style={sSt} value={f.marital} onChange={e=>set("marital",e.target.value)}><option value="single">Single</option><option value="married">Married/Common-Law</option><option value="divorced">Divorced</option></select></FF>
-            <FF label="Investment Horizon (years)" hint="When will you need this money?"><input style={iSt} type="number" min="1" max="40" value={f.horizon} onChange={e=>set("horizon",e.target.value)}/></FF>
-            <FF label="Total Savings (CAD)" hint="All liquid savings across accounts"><input style={iSt} type="number" min="0" value={f.savingsTotal} onChange={e=>set("savingsTotal",e.target.value)}/></FF>
-            <FF label="Monthly Savings Capacity (CAD)"><input style={iSt} type="number" min="0" value={f.monthlySavings} onChange={e=>set("monthlySavings",e.target.value)}/></FF>
-            <FF label="Total Debt (CAD)" hint="All non-mortgage debt combined"><input style={iSt} type="number" min="0" value={f.debt} onChange={e=>set("debt",e.target.value)}/></FF>
+            <FF label="Investment Horizon (years)" hint="When will you need this money?"><input {...numInput("horizon")} min="1" max="40"/></FF>
+            <FF label="Total Savings (CAD)" hint="All liquid savings across accounts"><input {...numInput("savingsTotal")} min="0"/></FF>
+            <FF label="Monthly Savings Capacity (CAD)"><input {...numInput("monthlySavings")} min="0"/></FF>
+            <FF label="Total Debt (CAD)" hint="All non-mortgage debt combined"><input {...numInput("debt")} min="0"/></FF>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <FF label="Existing TFSA Balance"><input style={iSt} type="number" min="0" value={f.existingTFSA} onChange={e=>set("existingTFSA",e.target.value)}/></FF>
-              <FF label="Existing RRSP Balance"><input style={iSt} type="number" min="0" value={f.existingRRSP} onChange={e=>set("existingRRSP",e.target.value)}/></FF>
+              <FF label="Existing TFSA Balance"><input {...numInput("existingTFSA")} min="0"/></FF>
+              <FF label="Existing RRSP Balance"><input {...numInput("existingRRSP")} min="0"/></FF>
             </div>
           </div>
           <FF label="Existing Investments" hint="Be specific — AI uses this to avoid recommending what you already hold">
