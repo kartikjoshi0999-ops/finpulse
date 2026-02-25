@@ -84,7 +84,7 @@ const AUTO_MODEL = {
 };
 
 async function callAI(messages, systemPrompt = "", modelKey = "GPT-4o") {
-  const GROQ_KEY = import.meta.env.VITE_GROQ_KEY;
+  const GROQ_KEY = "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";
   const modelMap = {
     "GPT-4o": "llama-3.3-70b-versatile",
     "GPT-4o-mini": "llama-3.1-8b-instant",
