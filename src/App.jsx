@@ -88,25 +88,30 @@ async function callAI(messages, systemPrompt = "", modelKey = "GPT-4o") {
     "GPT-4o": "openai-large", "GPT-4o-mini": "openai",
     "Gemini Flash": "gemini", "Mistral": "mistral", "Llama 3.3": "llama"
   };
-  const fallbackModels = ["openai-large", "openai", "mistral"];
+  const models = ["openai-large", "openai", "mistral", "gemini", "llama"];
   const primary = modelMap[modelKey] || "openai-large";
-  const toTry = [primary, ...fallbackModels.filter(m => m !== primary)];
+  const toTry = [primary, ...models.filter(m => m !== primary)];
+
+  // Build a single prompt string from messages + system
+  const buildPrompt = (msgs, sys) => {
+    let p = sys ? sys + "\n\n" : "";
+    p += msgs.map(m => (m.role === "user" ? "User: " : "Assistant: ") + m.content).join("\n");
+    return encodeURIComponent(p);
+  };
+
+  const prompt = buildPrompt(messages, systemPrompt);
 
   for (const model of toTry) {
     try {
-      const body = { messages, model, seed: Math.floor(Math.random()*999) };
-      if (systemPrompt) body.system = systemPrompt;
-      const res = await fetch("https://text.pollinations.ai/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      // Use GET endpoint - more reliable, no CORS issues
+      const url = `https://text.pollinations.ai/${prompt}?model=${model}&seed=${Math.floor(Math.random()*9999)}&json=false`;
+      const res = await fetch(url);
       if (!res.ok) continue;
       const text = await res.text();
       if (text && text.trim().length > 10) return text.trim();
     } catch(e) { continue; }
   }
-  throw new Error("AI unavailable — please try again in a moment");
+  throw new Error("AI service temporarily busy — please try again in a moment");
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1486,7 +1491,7 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
             {PRESETS.map(p=><button key={p} onClick={()=>setCmpTopic(p)} style={{background:T.bg2,border:`1px solid ${T.border}`,color:T.muted,padding:"6px 12px",borderRadius:7,fontSize:11}}>{p}</button>)}
           </div>
           <div style={{display:"flex",gap:10}}>
-            <input value={cmpTopic} onChange={e=>setCmpTopic(e.target.value)} onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter")runComparison();}} onClick={e=>e.stopPropagation()} placeholder="Type any financial question — all 4 AI models will answer simultaneously…" style={{...iSt,flex:1,padding:"12px 14px"}}/>
+            <input value={cmpTopic} onChange={e=>setCmpTopic(e.target.value)} onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter")runComparison();}} placeholder="Type any financial question — all 4 AI models will answer simultaneously…" style={{...iSt,flex:1,padding:"12px 14px"}}/>
             <button onClick={runComparison} disabled={!cmpTopic.trim()||Object.values(cmpLoading).some(v=>v)} style={{background:`linear-gradient(135deg,${T.pink},${T.purple})`,color:"#fff",padding:"12px 28px",borderRadius:9,fontWeight:800,fontSize:13,display:"flex",alignItems:"center",gap:8}}>
               {Object.values(cmpLoading).some(v=>v)?<><Spinner color="#fff" size={14}/>Running…</>:"🆚 Compare All"}
             </button>
@@ -1588,7 +1593,7 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
 
         {/* Input */}
         <div style={{display:"flex",gap:10,flexShrink:0}}>
-          <input style={{flex:1,background:T.bg1,border:`1px solid ${T.border}`,borderRadius:10,padding:"14px 18px",color:T.text,fontSize:13,fontFamily:T.sans}} value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter"&&!e.shiftKey)sendMsg();}} onClick={e=>e.stopPropagation()} placeholder={`Ask ${aiModel} anything — crypto, NFT alpha, fund picks, TFSA/RRSP strategy, portfolio advice…`} disabled={aiLoading}/>
+          <input style={{flex:1,background:T.bg1,border:`1px solid ${T.border}`,borderRadius:10,padding:"14px 18px",color:T.text,fontSize:13,fontFamily:T.sans}} value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter"&&!e.shiftKey)sendMsg();}} placeholder={`Ask ${aiModel} anything — crypto, NFT alpha, fund picks, TFSA/RRSP strategy, portfolio advice…`} disabled={aiLoading}/>
           <button onClick={sendMsg} disabled={aiLoading||!aiInput.trim()} style={{background:AI_MODELS[aiModel]?.color+"22",color:AI_MODELS[aiModel]?.color||T.purple,border:`1px solid ${(AI_MODELS[aiModel]?.color||T.purple)+"44"}`,padding:"14px 28px",borderRadius:10,fontWeight:800,fontSize:14,minWidth:110}}>
             {aiLoading?<Spinner color={AI_MODELS[aiModel]?.color} size={18}/>:"SEND ↵"}
           </button>
