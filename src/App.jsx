@@ -378,7 +378,7 @@ export default function App(){
   /* ── Live price ── */
   const [price,     setPrice]    = useState(67842);
   const [hist,      setHist]     = useState(()=>genSpark(67500,2800,40));
-  const [countdown, setCountdown]= useState(45);
+  const [countdown, setCountdown]= useState(90);
   const [lastUpd,   setLastUpd]  = useState(new Date());
 
   /* ── Navigation ── */
@@ -436,10 +436,10 @@ export default function App(){
       setPrice(p=>{
         const next=+(p+(Math.random()-.49)*280).toFixed(2);
         setHist(h=>[...h.slice(-39),{t:Date.now(),v:next}]);
-        setLastUpd(new Date()); setCountdown(45);
+        setLastUpd(new Date()); setCountdown(90);
         return next;
       });
-    },45000);
+    },90000);
     const cd=setInterval(()=>setCountdown(c=>Math.max(0,c-1)),1000);
     return()=>{clearInterval(iv);clearInterval(cd);};
   },[]);
@@ -629,7 +629,7 @@ Return this exact JSON (fill all numbers accurately):
     setAiLoading(true);
     try{
       const sys=`You are an expert financial analyst with live market data.
-BTC: $${price.toLocaleString()} (live, refreshes every 45s).
+BTC: $${price.toLocaleString()} (live, refreshes every 90s).
 Top 24h gainers: AVAX+7.83%, SOL+5.21%, RNDR+6.11%, LINK+4.67%.
 Worst 24h: DOGE-3.78%, FIL-4.33%, DOT-2.14%, LUNC-6.4%.
 Fear & Greed index: 68 (Greed). Overall market cap: $2.41T.
@@ -1195,22 +1195,22 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
             🤖 AI-powered by <span style={{color:T.blue,fontWeight:600}}>Pollinations.ai</span> — 100% free, no API keys. Your data never leaves your browser. Choose your AI model for the analysis.
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 28px"}}>
-            <FF label="Your Age"><input style={iSt} type="number" min="18" max="80" value={f.age} onChange={e=>set("age",e.target.value)}/></FF>
-            <FF label="Province / Territory"><select style={sSt} value={f.province} onChange={e=>set("province",e.target.value)}>{PROVS.map(p=><option key={p} value={p}>{p}</option>)}</select></FF>
-            <FF label="Annual Income (CAD)" hint="Pre-tax gross income"><input style={iSt} type="number" min="0" value={f.income} onChange={e=>set("income",e.target.value)}/></FF>
-            <FF label="Employment Type"><select style={sSt} value={f.jobType} onChange={e=>set("jobType",e.target.value)}><option value="employed">Full-time Employed</option><option value="parttime">Part-time</option><option value="selfemployed">Self-Employed</option><option value="contract">Contract / Freelance</option><option value="student">Student</option><option value="retired">Retired</option></select></FF>
-            <FF label="Marital Status"><select style={sSt} value={f.marital} onChange={e=>set("marital",e.target.value)}><option value="single">Single</option><option value="married">Married/Common-Law</option><option value="divorced">Divorced</option></select></FF>
-            <FF label="Investment Horizon (years)" hint="When will you need this money?"><input style={iSt} type="number" min="1" max="40" value={f.horizon} onChange={e=>set("horizon",e.target.value)}/></FF>
-            <FF label="Total Savings (CAD)" hint="All liquid savings across accounts"><input style={iSt} type="number" min="0" value={f.savingsTotal} onChange={e=>set("savingsTotal",e.target.value)}/></FF>
-            <FF label="Monthly Savings Capacity (CAD)"><input style={iSt} type="number" min="0" value={f.monthlySavings} onChange={e=>set("monthlySavings",e.target.value)}/></FF>
-            <FF label="Total Debt (CAD)" hint="All non-mortgage debt combined"><input style={iSt} type="number" min="0" value={f.debt} onChange={e=>set("debt",e.target.value)}/></FF>
+            <FF label="Your Age"><input style={iSt} type="number" min="18" max="80" value={f.age} onChange={e=>set("age",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
+            <FF label="Province / Territory"><select style={sSt} value={f.province} onChange={e=>set("province",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}>{PROVS.map(p=><option key={p} value={p}>{p}</option>)}</select></FF>
+            <FF label="Annual Income (CAD)" hint="Pre-tax gross income"><input style={iSt} type="number" min="0" value={f.income} onChange={e=>set("income",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
+            <FF label="Employment Type"><select style={sSt} value={f.jobType} onChange={e=>set("jobType",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}><option value="employed">Full-time Employed</option><option value="parttime">Part-time</option><option value="selfemployed">Self-Employed</option><option value="contract">Contract / Freelance</option><option value="student">Student</option><option value="retired">Retired</option></select></FF>
+            <FF label="Marital Status"><select style={sSt} value={f.marital} onChange={e=>set("marital",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}><option value="single">Single</option><option value="married">Married/Common-Law</option><option value="divorced">Divorced</option></select></FF>
+            <FF label="Investment Horizon (years)" hint="When will you need this money?"><input style={iSt} type="number" min="1" max="40" value={f.horizon} onChange={e=>set("horizon",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
+            <FF label="Total Savings (CAD)" hint="All liquid savings across accounts"><input style={iSt} type="number" min="0" value={f.savingsTotal} onChange={e=>set("savingsTotal",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
+            <FF label="Monthly Savings Capacity (CAD)"><input style={iSt} type="number" min="0" value={f.monthlySavings} onChange={e=>set("monthlySavings",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
+            <FF label="Total Debt (CAD)" hint="All non-mortgage debt combined"><input style={iSt} type="number" min="0" value={f.debt} onChange={e=>set("debt",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <FF label="Existing TFSA Balance"><input style={iSt} type="number" min="0" value={f.existingTFSA} onChange={e=>set("existingTFSA",e.target.value)}/></FF>
-              <FF label="Existing RRSP Balance"><input style={iSt} type="number" min="0" value={f.existingRRSP} onChange={e=>set("existingRRSP",e.target.value)}/></FF>
+              <FF label="Existing TFSA Balance"><input style={iSt} type="number" min="0" value={f.existingTFSA} onChange={e=>set("existingTFSA",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
+              <FF label="Existing RRSP Balance"><input style={iSt} type="number" min="0" value={f.existingRRSP} onChange={e=>set("existingRRSP",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
             </div>
           </div>
           <FF label="Existing Investments" hint="Be specific — AI uses this to avoid recommending what you already hold">
-            <input style={iSt} value={f.existingInvestments} onChange={e=>set("existingInvestments",e.target.value)} placeholder="e.g. $40k in XEQT via Questrade TFSA, condo worth $450k, employer pension…"/>
+            <input style={iSt} value={f.existingInvestments} onChange={e=>set("existingInvestments",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()} placeholder="e.g. $40k in XEQT via Questrade TFSA, condo worth $450k, employer pension…"/>
           </FF>
           <FF label="Financial Goals — Select All That Apply">
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -1223,7 +1223,7 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
           <FF label={`Risk Appetite — ${f.riskScore}/10 · ${RLBL[parseInt(f.riskScore)]||""}`} hint="1 = capital preservation only · 10 = max growth, can tolerate 50%+ drawdowns">
             <div style={{display:"flex",alignItems:"center",gap:14}}>
               <span style={{fontSize:11,color:T.green,fontWeight:700}}>Conservative</span>
-              <input type="range" min="1" max="10" value={f.riskScore} onChange={e=>set("riskScore",e.target.value)} style={{flex:1,accentColor:T.purple}}/>
+              <input type="range" min="1" max="10" value={f.riskScore} onChange={e=>set("riskScore",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()} style={{flex:1,accentColor:T.purple}}/>
               <span style={{fontSize:11,color:T.red,fontWeight:700}}>Aggressive</span>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
@@ -1465,7 +1465,7 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
             {PRESETS.map(p=><button key={p} onClick={()=>setCmpTopic(p)} style={{background:T.bg2,border:`1px solid ${T.border}`,color:T.muted,padding:"6px 12px",borderRadius:7,fontSize:11}}>{p}</button>)}
           </div>
           <div style={{display:"flex",gap:10}}>
-            <input value={cmpTopic} onChange={e=>setCmpTopic(e.target.value)} onKeyDown={e=>e.key==="Enter"&&runComparison()} placeholder="Type any financial question — all 4 AI models will answer simultaneously…" style={{...iSt,flex:1,padding:"12px 14px"}}/>
+            <input value={cmpTopic} onChange={e=>setCmpTopic(e.target.value)} onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter")runComparison();}} onClick={e=>e.stopPropagation()} placeholder="Type any financial question — all 4 AI models will answer simultaneously…" style={{...iSt,flex:1,padding:"12px 14px"}}/>
             <button onClick={runComparison} disabled={!cmpTopic.trim()||Object.values(cmpLoading).some(v=>v)} style={{background:`linear-gradient(135deg,${T.pink},${T.purple})`,color:"#fff",padding:"12px 28px",borderRadius:9,fontWeight:800,fontSize:13,display:"flex",alignItems:"center",gap:8}}>
               {Object.values(cmpLoading).some(v=>v)?<><Spinner color="#fff" size={14}/>Running…</>:"🆚 Compare All"}
             </button>
@@ -1567,7 +1567,7 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
 
         {/* Input */}
         <div style={{display:"flex",gap:10,flexShrink:0}}>
-          <input style={{flex:1,background:T.bg1,border:`1px solid ${T.border}`,borderRadius:10,padding:"14px 18px",color:T.text,fontSize:13,fontFamily:T.sans}} value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendMsg()} placeholder={`Ask ${aiModel} anything — crypto, NFT alpha, fund picks, TFSA/RRSP strategy, portfolio advice…`} disabled={aiLoading}/>
+          <input style={{flex:1,background:T.bg1,border:`1px solid ${T.border}`,borderRadius:10,padding:"14px 18px",color:T.text,fontSize:13,fontFamily:T.sans}} value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter"&&!e.shiftKey)sendMsg();}} onClick={e=>e.stopPropagation()} placeholder={`Ask ${aiModel} anything — crypto, NFT alpha, fund picks, TFSA/RRSP strategy, portfolio advice…`} disabled={aiLoading}/>
           <button onClick={sendMsg} disabled={aiLoading||!aiInput.trim()} style={{background:AI_MODELS[aiModel]?.color+"22",color:AI_MODELS[aiModel]?.color||T.purple,border:`1px solid ${(AI_MODELS[aiModel]?.color||T.purple)+"44"}`,padding:"14px 28px",borderRadius:10,fontWeight:800,fontSize:14,minWidth:110}}>
             {aiLoading?<Spinner color={AI_MODELS[aiModel]?.color} size={18}/>:"SEND ↵"}
           </button>
