@@ -89,21 +89,24 @@ async function callAI(messages, systemPrompt = "", modelKey = "GPT-4o") {
     {role:"system", content: sys},
     ...messages.map(m => ({role: m.role==="assistant"?"assistant":"user", content: m.content}))
   ];
-
-  // Use Pollinations Mistral - confirmed working
-  const r = await Promise.race([
-    fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({messages: allMsgs, model: "mistral", private: true})
-    }),
-    new Promise((_,rej) => setTimeout(() => rej(new Error("timeout")), 25000))
-  ]);
-
-  if (!r.ok) throw new Error(`Error ${r.status}`);
-  const t = await r.text();
-  if (!t || t.trim().length < 10) throw new Error("Empty response");
-  return t.trim();
+  const models = ["mistral", "openai", "llama", "gemini", "openai-large"];
+  for (const model of models) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch("https://text.pollinations.ai/", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({messages: allMsgs, model, private: true, seed: Math.floor(Math.random()*9999)}),
+        signal: ctrl.signal
+      });
+      clearTimeout(timer);
+      if (!r.ok) continue;
+      const t = await r.text();
+      if (t && t.trim().length > 20 && !t.startsWith("<!")) return t.trim();
+    } catch(e) { continue; }
+  }
+  throw new Error("AI temporarily unavailable — please try again");
 }
 
 
@@ -463,7 +466,7 @@ export default function App(){
     return()=>{clearInterval(iv);clearInterval(cd);};
   },[]);
 
-  useEffect(()=>{aiEnd.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
+  // scroll handled manually in sendMsg
 
   /* ── Build forecast data ── */
   const buildForecast=useCallback(()=>{
@@ -919,210 +922,175 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
   /* ══════════════════════════════════════════════════════════
      TAB: NFT
   ══════════════════════════════════════════════════════════ */
-  function NFTTab(){
+  function ExplorerTab(){
+    const [view, setView] = useState("nft");
+    const [aiText, setAiText] = useState("");
+    const [aiLoad, setAiLoad] = useState(false);
+
+    async function askAI(topic){
+      setAiLoad(true); setAiText("");
+      try {
+        const t = await callAI([{role:"user", content: topic}],
+          "You are a concise financial analyst. Give specific, useful insights in 3-4 bullet points. Under 150 words.");
+        setAiText(t);
+      } catch(e){ setAiText("⚠️ " + e.message); }
+      setAiLoad(false);
+    }
+
+    const tabs = [{id:"nft",label:"🖼 NFTs"},{id:"funds",label:"📊 Funds"},{id:"upcoming",label:"🔮 Upcoming"}];
+
     return(
       <div className="fade-up">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 310px",gap:16}}>
+        {/* Tab toggle */}
+        <div style={{display:"flex",gap:8,marginBottom:20}}>
+          {tabs.map(t=>(
+            <button key={t.id} onClick={()=>{setView(t.id);setAiText("");}}
+              style={{padding:"8px 20px",borderRadius:9,fontSize:13,fontWeight:view===t.id?700:500,
+                background:view===t.id?"linear-gradient(135deg,"+T.purple+","+T.blue+")":"transparent",
+                color:view===t.id?"#fff":T.muted,border:`1px solid ${view===t.id?T.purple:T.border}`}}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* NFT View */}
+        {view==="nft" && (
           <div>
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.purple}>Top NFT Collections — Live Rankings</Sec>
-              <div style={{display:"grid",gridTemplateColumns:"1.2fr 80px 90px 70px 80px 1fr",gap:12,padding:"8px 0",borderBottom:`1px solid ${T.border2}`,fontSize:10,letterSpacing:1.5,color:T.muted,textTransform:"uppercase"}}>
-                <span>Collection</span><span>Floor Ξ</span><span>Floor USD</span><span>24h%</span><span>Volume</span><span>Sentiment</span>
-              </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14,marginBottom:16}}>
               {NFTS.map((n,i)=>(
-                <div key={i} style={{display:"grid",gridTemplateColumns:"1.2fr 80px 90px 70px 80px 1fr",gap:12,padding:"13px 0",borderBottom:i<NFTS.length-1?`1px solid #0a0b14`:"none",alignItems:"center",fontSize:13}}>
-                  <div><div style={{fontWeight:700,color:T.text}}>{n.name}</div><div style={{fontSize:11,color:T.muted}}>{n.sym} · {n.owners.toLocaleString()} owners</div></div>
-                  <span style={{fontFamily:T.mono,fontWeight:600}}>{n.floor} Ξ</span>
-                  <span style={{color:T.sub,fontSize:12}}>{n.fUSD}</span>
-                  <Pct v={n.chg}/>
-                  <span style={{fontSize:12,color:T.sub}}>{n.vol} ETH</span>
+                <div key={i} style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:18,transition:"border .2s"}}
+                  onMouseEnter={e=>e.currentTarget.style.borderColor=T.purple+"88"}
+                  onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div>
+                      <div style={{fontSize:15,fontWeight:700,color:T.text}}>{n.name}</div>
+                      <div style={{fontSize:11,color:T.muted,marginTop:2}}>{n.sym} · {n.owners.toLocaleString()} owners</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:18,fontWeight:800,color:T.text,fontFamily:T.mono}}>{n.floor} ETH</div>
+                      <Pct v={n.chg}/>
+                    </div>
+                  </div>
+                  <div style={{fontSize:12,color:T.muted,marginBottom:10}}>{n.fUSD} floor · {n.vol} ETH 7d vol</div>
                   <SentBar sc={n.sent}/>
+                  <MiniSpark data={n.weekVol.map((v,j)=>({t:j,v}))} color={n.chg>=0?T.green:T.red} h={45}/>
+                  <button onClick={()=>askAI(`Analyze ${n.name} NFT collection. Floor: ${n.floor} ETH (${n.fUSD}), 7d change: ${n.chg}%, volume: ${n.vol} ETH, ${n.owners} owners, sentiment: ${n.sent}/100. Should I buy, hold or avoid? Give specific reasons.`)}
+                    style={{marginTop:10,width:"100%",background:T.purple+"22",color:T.purple,border:`1px solid ${T.purple}44`,borderRadius:7,padding:"7px",fontSize:11,fontWeight:600}}>
+                    🤖 AI Analysis
+                  </button>
                 </div>
               ))}
             </div>
+            <AIBlock text={aiText} loading={aiLoad} model="Mistral"/>
+          </div>
+        )}
 
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.teal}>7-Day Volume Trend by Collection</Sec>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart margin={{top:5,right:10,bottom:0,left:0}}>
-                  <XAxis dataKey="i" type="number" domain={[0,6]} tick={{fill:T.muted,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={i=>["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}/>
-                  <YAxis tick={{fill:T.muted,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>`${v} ETH`}/>
-                  <Tooltip contentStyle={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12}}/>
-                  <Legend wrapperStyle={{fontSize:10,color:T.muted}}/>
-                  {NFTS.filter(n=>n.chg>0).map((n,idx)=>(
-                    <Line key={n.sym} data={n.weekVol.map((v,i)=>({i,v}))} type="monotone" dataKey="v" stroke={[T.green,T.teal,T.blue,T.purple][idx%4]} strokeWidth={2} dot={false} name={n.sym}/>
+        {/* Funds View */}
+        {view==="funds" && (
+          <div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead>
+                  <tr style={{borderBottom:`1px solid ${T.border}`}}>
+                    {["Fund","Ticker","NAV","YTD","1Y Ret","3Y Ret","Expense","Risk","Stars",""].map(h=>(
+                      <th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:10,letterSpacing:1.5,color:T.muted,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {FUNDS.map((f,i)=>(
+                    <tr key={i} style={{borderBottom:`1px solid ${T.border}22`}}
+                      onMouseEnter={e=>e.currentTarget.style.background=T.bg2}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      <td style={{padding:"12px",color:T.text,fontWeight:600}}>{f.name}</td>
+                      <td style={{padding:"12px",fontFamily:T.mono,color:T.blue,fontSize:11}}>{f.t}</td>
+                      <td style={{padding:"12px",fontFamily:T.mono,color:T.text}}>${f.nav}</td>
+                      <td style={{padding:"12px"}}><Pct v={f.ytd}/></td>
+                      <td style={{padding:"12px"}}><Pct v={f.r1}/></td>
+                      <td style={{padding:"12px"}}><Pct v={f.r3}/></td>
+                      <td style={{padding:"12px",color:T.muted,fontSize:11}}>{f.exp}</td>
+                      <td style={{padding:"12px"}}><Chip color={f.risk==="Low"?T.green:f.risk.includes("High")?T.red:T.yellow}>{f.risk}</Chip></td>
+                      <td style={{padding:"12px",color:T.yellow}}>{"★".repeat(f.stars)}{"☆".repeat(5-f.stars)}</td>
+                      <td style={{padding:"12px"}}>
+                        <button onClick={()=>askAI(`Analyze ${f.name} (${f.t}). NAV $${f.nav}, YTD ${f.ytd}%, 1Y return ${f.r1}%, 3Y return ${f.r3}%, expense ratio ${f.exp}, risk: ${f.risk}. Is this a good investment right now?`)}
+                          style={{background:T.blue+"22",color:T.blue,border:`1px solid ${T.blue}44`,borderRadius:6,padding:"5px 10px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>
+                          🤖 Ask AI
+                        </button>
+                      </td>
+                    </tr>
                   ))}
-                </LineChart>
-              </ResponsiveContainer>
+                </tbody>
+              </table>
             </div>
+            <AIBlock text={aiText} loading={aiLoad} model="Mistral"/>
           </div>
+        )}
 
+        {/* Upcoming View */}
+        {view==="upcoming" && (
           <div>
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:"24px 16px",marginBottom:16,textAlign:"center"}}>
-              <SentGauge score={74} size={265} title="NFT Market Sentiment" sub="Indicates whether most users posting on NFT streams over the last 24 hours are bullish or bearish."/>
-            </div>
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.purple}>Collection Sentiment Scores</Sec>
-              {NFTS.map(n=>(<div key={n.sym} style={{marginBottom:13}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:5}}><span style={{color:T.text,fontWeight:600}}>{n.name}</span><span style={{fontFamily:T.mono,fontSize:11,color:n.chg>0?T.green:T.red}}>{n.chg>0?"+":""}{n.chg}%</span></div><SentBar sc={n.sent}/></div>))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ══════════════════════════════════════════════════════════
-     TAB: FUNDS
-  ══════════════════════════════════════════════════════════ */
-  function FundsTab(){
-    const PC=[T.green,T.blue,T.purple,T.red,T.yellow,T.teal];
-    return(
-      <div className="fade-up">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 310px",gap:16}}>
-          <div>
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.orange}>Mutual Funds & ETFs — Performance</Sec>
-              <div style={{display:"grid",gridTemplateColumns:"1.3fr 70px 75px 65px 65px 75px 80px",gap:10,padding:"8px 0",borderBottom:`1px solid ${T.border2}`,fontSize:10,letterSpacing:1.5,color:T.muted,textTransform:"uppercase"}}>
-                <span>Fund</span><span>NAV</span><span>YTD</span><span>1Y</span><span>3Y Ann</span><span>Expense</span><span>Rating</span>
-              </div>
-              {FUNDS.map((f,i)=>(
-                <div key={i} style={{display:"grid",gridTemplateColumns:"1.3fr 70px 75px 65px 65px 75px 80px",gap:10,padding:"12px 0",borderBottom:i<FUNDS.length-1?`1px solid #0a0b14`:"none",alignItems:"center",fontSize:13}}>
-                  <div><div style={{fontWeight:700,color:T.text,fontSize:13}}>{f.name}</div><div style={{fontSize:10,color:T.muted}}>{f.t} · {f.type} · Risk: {f.risk}</div></div>
-                  <span style={{fontFamily:T.mono,fontSize:12,color:T.sub}}>${f.nav}</span>
-                  <span style={{color:f.ytd>0?T.green:T.red,fontWeight:700,fontSize:14}}>{f.ytd>0?"+":""}{f.ytd}%</span>
-                  <span style={{color:f.r1>0?T.green:T.red,fontSize:12}}>{f.r1>0?"+":""}{f.r1}%</span>
-                  <span style={{color:f.r3>0?T.green:T.red,fontSize:12}}>{f.r3>0?"+":""}{f.r3}%</span>
-                  <span style={{color:T.muted,fontSize:12}}>{f.exp}</span>
-                  <div><span style={{color:T.yellow}}>{"★".repeat(f.stars)}</span><span style={{color:T.dim}}>{"★".repeat(5-f.stars)}</span></div>
-                </div>
-              ))}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
               <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20}}>
-                <Sec dot={T.yellow}>YTD vs 1-Year Returns</Sec>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={FUNDS.map(f=>({name:f.t,ytd:f.ytd,r1:f.r1}))} barGap={3}>
-                    <XAxis dataKey="name" tick={{fill:T.muted,fontSize:10}} axisLine={false} tickLine={false}/>
-                    <YAxis tick={{fill:T.muted,fontSize:10}} axisLine={false} tickLine={false} unit="%"/>
-                    <Tooltip content={<CTip prefix="" dec={1}/>}/>
-                    <Legend wrapperStyle={{fontSize:10,color:T.muted}}/>
-                    <Bar dataKey="ytd" name="YTD"    radius={[4,4,0,0]} fill={T.blue}  opacity={.85}/>
-                    <Bar dataKey="r1"  name="1-Year" radius={[4,4,0,0]} fill={T.teal}  opacity={.65}/>
-                  </BarChart>
-                </ResponsiveContainer>
+                <Sec dot={T.green}>🚀 AI Best Picks — Next 12 Months</Sec>
+                {BEST_PICKS.map((p,i)=>(
+                  <div key={i} style={{borderBottom:i<BEST_PICKS.length-1?`1px solid ${T.border}`:"none",paddingBottom:14,marginBottom:14}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{width:36,height:36,borderRadius:9,background:`linear-gradient(135deg,${T.green}22,${T.teal}22)`,border:`1px solid ${T.green}33`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:T.green,fontSize:13}}>{p.s}</div>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:700,color:T.text}}>{p.name}</div>
+                          <div style={{fontSize:11,color:T.muted}}>${p.p.toLocaleString()}</div>
+                        </div>
+                      </div>
+                      <Chip color={T.green}>{p.target}</Chip>
+                    </div>
+                    <div style={{fontSize:12,color:T.sub,lineHeight:1.6,marginBottom:8}}>{p.why}</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                      {p.tags.map(t=><Chip key={t} color={T.teal}>{t}</Chip>)}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{flex:1,height:4,background:T.dim,borderRadius:2}}><div style={{width:`${p.bull}%`,height:"100%",background:`linear-gradient(90deg,${T.green}55,${T.green})`,borderRadius:2}}/></div>
+                      <span style={{fontSize:11,color:T.green,fontFamily:T.mono,fontWeight:700}}>{p.bull}% bullish</span>
+                    </div>
+                    <button onClick={()=>askAI(`Deep dive on ${p.name} (${p.s}). Current price $${p.p}, target ${p.target}. Thesis: ${p.why}. Confirm or challenge this thesis with your own analysis.`)}
+                      style={{marginTop:10,width:"100%",background:T.green+"15",color:T.green,border:`1px solid ${T.green}33`,borderRadius:7,padding:"6px",fontSize:11,fontWeight:600}}>
+                      🤖 Deep Dive Analysis
+                    </button>
+                  </div>
+                ))}
               </div>
               <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20}}>
-                <Sec dot={T.orange}>Allocation by Fund Type</Sec>
-                <PieChart width={260} height={180}>
-                  <Pie data={FUNDS.map(f=>({name:f.t,value:Math.abs(f.ytd),pos:f.ytd>0}))} cx={130} cy={90} outerRadius={80} innerRadius={42} dataKey="value" paddingAngle={3}>
-                    {FUNDS.map((_,i)=><Cell key={i} fill={PC[i]} opacity={FUNDS[i].ytd>0?1:.35}/>)}
-                  </Pie>
-                  <Tooltip contentStyle={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12}} formatter={(v,n,p)=>[`${v.toFixed(1)}% YTD`,p.payload.name]}/>
-                </PieChart>
+                <Sec dot={T.red}>⚠️ AI Risk Warnings — Avoid</Sec>
+                {WORST_PICKS.map((p,i)=>(
+                  <div key={i} style={{borderBottom:i<WORST_PICKS.length-1?`1px solid ${T.border}`:"none",paddingBottom:14,marginBottom:14}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{width:36,height:36,borderRadius:9,background:`linear-gradient(135deg,${T.red}22,${T.orange}22)`,border:`1px solid ${T.red}33`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:T.red,fontSize:13}}>{p.s}</div>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:700,color:T.text}}>{p.name}</div>
+                          <div style={{fontSize:11,color:T.muted}}>${p.p}</div>
+                        </div>
+                      </div>
+                      <Chip color={T.red}>{p.risk}</Chip>
+                    </div>
+                    <div style={{fontSize:12,color:T.sub,lineHeight:1.6,marginBottom:8}}>{p.why}</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{p.tags.map(t=><Chip key={t} color={T.red}>{t}</Chip>)}</div>
+                  </div>
+                ))}
+                <button onClick={()=>askAI(`What are the biggest crypto risks to avoid in 2025? What red flags should investors watch for? Give specific coins and reasons.`)}
+                  style={{marginTop:8,width:"100%",background:T.red+"15",color:T.red,border:`1px solid ${T.red}33`,borderRadius:7,padding:"8px",fontSize:11,fontWeight:600}}>
+                  🤖 Full Risk Analysis
+                </button>
               </div>
             </div>
+            <AIBlock text={aiText} loading={aiLoad} model="Mistral"/>
           </div>
-
-          <div>
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:"24px 16px",marginBottom:16,textAlign:"center"}}>
-              <SentGauge score={72} size={265} title="Fund Investor Sentiment" sub="Indicates whether most users posting on fund streams over the last 24 hours are bullish or bearish."/>
-            </div>
-            {/* Risk/Return radar */}
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.blue}>Risk vs Return Comparison</Sec>
-              <ResponsiveContainer width="100%" height={200}>
-                <RadarChart data={[{metric:"YTD",VFINX:18.4,FDGRX:24.1,ARKK:-8.2},{metric:"1Y Ret",VFINX:26.3,FDGRX:31.2,ARKK:18.7},{metric:"3Y Ann",VFINX:10.1,FDGRX:14.8,ARKK:-14.2},{metric:"Expense",...Object.fromEntries(FUNDS.slice(0,3).map(f=>[f.t.replace(".",""),parseFloat(f.exp)*100]))}]}>
-                  <PolarGrid stroke={T.border2}/>
-                  <PolarAngleAxis dataKey="metric" tick={{fill:T.muted,fontSize:10}}/>
-                  <Radar name="VFINX" dataKey="VFINX" stroke={T.green}  fill={T.green}  fillOpacity={.15}/>
-                  <Radar name="FDGRX" dataKey="FDGRX" stroke={T.blue}   fill={T.blue}   fillOpacity={.15}/>
-                  <Radar name="ARKK"  dataKey="ARKK"  stroke={T.red}    fill={T.red}    fillOpacity={.15}/>
-                  <Legend wrapperStyle={{fontSize:10,color:T.muted}}/>
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     );
   }
 
-  /* ══════════════════════════════════════════════════════════
-     TAB: UPCOMING
-  ══════════════════════════════════════════════════════════ */
-  function UpcomingTab(){
-    return(
-      <div className="fade-up">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          {/* Best picks */}
-          <div>
-            <div style={{background:"linear-gradient(160deg,#040f07,#090b18)",border:`1px solid ${T.green}28`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.green}>🚀 AI-Screened Best Performers</Sec>
-              <p style={{fontSize:12,color:T.muted,marginBottom:16,lineHeight:1.65}}>Screened using 5 AI models — on-chain metrics, developer activity, narrative strength, and institutional inflow signals. Each coin was analyzed by the model most suited to its category.</p>
-              {BEST_PICKS.map((u,i)=>(
-                <div key={i} style={{background:"#030e06",border:`1px solid ${T.green}18`,borderRadius:11,padding:16,marginBottom:12}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                    <div>
-                      <span style={{fontSize:20,fontWeight:800,color:T.text,fontFamily:T.mono}}>{u.s}</span>
-                      <span style={{fontSize:12,color:T.muted,marginLeft:10}}>{u.name}</span>
-                    </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:22,fontWeight:800,color:T.green,fontFamily:T.mono}}>{u.target}</div>
-                      <div style={{fontSize:11,color:T.muted}}>Current ${u.p}</div>
-                    </div>
-                  </div>
-                  <div style={{fontSize:12,color:T.sub,lineHeight:1.65,marginBottom:12}}>{u.why}</div>
-                  <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:11}}>
-                    {u.tags.map(t=><Chip key={t} color={T.green}>{t}</Chip>)}
-                    <Chip color={AI_MODELS[u.model]?.color||T.muted}>{AI_MODELS[u.model]?.badge} {u.model}</Chip>
-                  </div>
-                  <div style={{fontSize:9,color:T.muted,marginBottom:5,letterSpacing:1.5}}>BULLISH SENTIMENT SCORE</div>
-                  <SentBar sc={u.bull}/>
-                </div>
-              ))}
-            </div>
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:"24px 16px",marginBottom:16,textAlign:"center"}}>
-              <SentGauge score={86} size={260} title="Best Picks — Sentiment" sub="Indicates whether most users posting on these upcoming symbols over the last 24 hours are bullish or bearish."/>
-            </div>
-          </div>
-
-          {/* Worst picks */}
-          <div>
-            <div style={{background:"linear-gradient(160deg,#0f0404,#090b18)",border:`1px solid ${T.red}28`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.red}>⚠️ AI-Screened Worst Performers</Sec>
-              <p style={{fontSize:12,color:T.muted,marginBottom:16,lineHeight:1.65}}>High-risk assets flagged across multiple AI models — supply risks, abandoned roadmaps, VC unlock pressure, and fading community sentiment patterns. Avoid or exit.</p>
-              {WORST_PICKS.map((u,i)=>(
-                <div key={i} style={{background:"#0f0303",border:`1px solid ${T.red}18`,borderRadius:11,padding:16,marginBottom:12}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                    <div>
-                      <span style={{fontSize:20,fontWeight:800,color:T.text,fontFamily:T.mono}}>{u.s}</span>
-                      <span style={{fontSize:12,color:T.muted,marginLeft:10}}>{u.name}</span>
-                    </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:22,fontWeight:800,color:T.red,fontFamily:T.mono}}>{u.risk}</div>
-                      <div style={{fontSize:11,color:T.muted}}>${u.p.toLocaleString()}</div>
-                    </div>
-                  </div>
-                  <div style={{fontSize:12,color:T.sub,lineHeight:1.65,marginBottom:12}}>{u.why}</div>
-                  <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:11}}>
-                    {u.tags.map(t=><Chip key={t} color={T.red}>{t}</Chip>)}
-                    <Chip color={AI_MODELS[u.model]?.color||T.muted}>{AI_MODELS[u.model]?.badge} {u.model}</Chip>
-                  </div>
-                  <div style={{fontSize:9,color:T.muted,marginBottom:5,letterSpacing:1.5}}>BEARISH SENTIMENT SCORE</div>
-                  <SentBar sc={u.bear}/>
-                </div>
-              ))}
-            </div>
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:"24px 16px",marginBottom:16,textAlign:"center"}}>
-              <SentGauge score={14} size={260} title="Worst Picks — Sentiment" sub="Indicates whether most users posting on these flagged symbols over the last 24 hours are bullish or bearish."/>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ══════════════════════════════════════════════════════════
+    /* ══════════════════════════════════════════════════════════
      TAB: SENTIMENT
   ══════════════════════════════════════════════════════════ */
   function SentimentTab(){
@@ -1620,7 +1588,7 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
 
   const VIEWS={
     overview:<OverviewTab/>, markets:<MarketsTab/>, forecast:<ForecastTab/>,
-    nft:<NFTTab/>, funds:<FundsTab/>, upcoming:<UpcomingTab/>,
+    explorer:<ExplorerTab/>,
     sentiment:<SentimentTab/>, portfolio:<PortfolioTab/>,
     compare:<CompareTab/>, ai:<AITab/>,
   };
