@@ -1,0 +1,26 @@
+modules = ["nodejs-20"]
+
+[[ports]]
+localPort = 3000
+externalPort = 3000
+
+[[ports]]
+localPort = 3001
+
+[[ports]]
+localPort = 3002
+
+[[ports]]
+localPort = 5000
+
+[[ports]]
+localPort = 5173
+
+[[ports]]
+localPort = 5174
+
+[nix]
+packages = ["nodejs_20", "lsof"]
+
+[agent]
+expertMode = true
