@@ -84,19 +84,29 @@ const AUTO_MODEL = {
 };
 
 async function callAI(messages, systemPrompt = "", modelKey = "GPT-4o") {
-  const model = AI_MODELS[modelKey]?.id || "openai-large";
-  const body   = { messages, model, seed: 42 };
-  if (systemPrompt) body.system = systemPrompt;
+  const modelMap = {
+    "GPT-4o": "openai-large", "GPT-4o-mini": "openai",
+    "Gemini Flash": "gemini", "Mistral": "mistral", "Llama 3.3": "llama"
+  };
+  const fallbackModels = ["openai-large", "openai", "mistral"];
+  const primary = modelMap[modelKey] || "openai-large";
+  const toTry = [primary, ...fallbackModels.filter(m => m !== primary)];
 
-  const res = await fetch("https://text.pollinations.ai/", {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify(body),
-  });
-
-  if (!res.ok) throw new Error(`AI error ${res.status} — try again`);
-  const text = await res.text();
-  return text.trim();
+  for (const model of toTry) {
+    try {
+      const body = { messages, model, seed: Math.floor(Math.random()*999) };
+      if (systemPrompt) body.system = systemPrompt;
+      const res = await fetch("https://text.pollinations.ai/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (text && text.trim().length > 10) return text.trim();
+    } catch(e) { continue; }
+  }
+  throw new Error("AI unavailable — please try again in a moment");
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -378,7 +388,6 @@ export default function App(){
   /* ── Live price ── */
   const [price,     setPrice]    = useState(67842);
   const [hist,      setHist]     = useState(()=>genSpark(67500,2800,40));
-  const [countdown, setCountdown]= useState(90);
   const [lastUpd,   setLastUpd]  = useState(new Date());
 
   /* ── Navigation ── */
@@ -426,21 +435,33 @@ export default function App(){
   const [aiLoading, setAiLoading] = useState(false);
   const [aiModel,   setAiModel]   = useState("GPT-4o-mini");
   const aiEnd = useRef(null);
+  const countdownVal = useRef(90);
+  const cdRef2 = useRef(null);
 
   const priceUp  = hist.length>1 && hist[hist.length-1].v >= hist[hist.length-2].v;
   const priceCol = priceUp ? T.green : T.red;
 
-  /* ── 45-second refresh ── */
+  /* ── 90-second refresh ── */
+  const cdRef = useRef(null);
   useEffect(()=>{
+    const updateCD = ()=>{
+      const v = countdownVal.current + "s";
+      if(cdRef.current) cdRef.current.textContent = v;
+      if(cdRef2.current) cdRef2.current.textContent = v;
+    };
     const iv=setInterval(()=>{
       setPrice(p=>{
         const next=+(p+(Math.random()-.49)*280).toFixed(2);
         setHist(h=>[...h.slice(-39),{t:Date.now(),v:next}]);
-        setLastUpd(new Date()); setCountdown(90);
+        setLastUpd(new Date());
+        countdownVal.current = 90;
         return next;
       });
     },90000);
-    const cd=setInterval(()=>setCountdown(c=>Math.max(0,c-1)),1000);
+    const cd=setInterval(()=>{
+      countdownVal.current = Math.max(0, countdownVal.current - 1);
+      updateCD();
+    },1000);
     return()=>{clearInterval(iv);clearInterval(cd);};
   },[]);
 
@@ -624,7 +645,7 @@ Return this exact JSON (fill all numbers accurately):
   /* ── AI Chat ── */
   async function sendMsg(){
     if(!aiInput.trim()||aiLoading)return;
-    const msg=aiInput.trim();setAiInput("");
+    const msg=aiInput.trim();setAiInput("");setShouldScroll(true);
     setMsgs(m=>[...m,{role:"user",content:msg,model:aiModel}]);
     setAiLoading(true);
     try{
@@ -686,7 +707,7 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
                 <div style={{fontSize:44,fontWeight:900,color:priceCol,fontFamily:T.mono,letterSpacing:-2,lineHeight:1}}>${price.toLocaleString()}</div>
                 <div style={{display:"flex",alignItems:"center",gap:16,marginTop:10}}>
                   <span style={{fontSize:12,color:priceCol,fontWeight:700}}>{priceUp?"▲ +0.21%":"▼ −0.14%"}</span>
-                  <span style={{fontSize:11,color:T.muted}}>Refreshes in <span style={{color:T.blue,fontFamily:T.mono,fontWeight:700}}>{countdown}s</span></span>
+                  <span style={{fontSize:11,color:T.muted}}>Refreshes in <span style={{color:T.blue,fontFamily:T.mono,fontWeight:700}}><span ref={cdRef}>90s</span></span></span>
                   <span style={{fontSize:10,color:T.muted}}>Last: {lastUpd.toLocaleTimeString()}</span>
                 </div>
               </div>
@@ -1195,22 +1216,22 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
             🤖 AI-powered by <span style={{color:T.blue,fontWeight:600}}>Pollinations.ai</span> — 100% free, no API keys. Your data never leaves your browser. Choose your AI model for the analysis.
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 28px"}}>
-            <FF label="Your Age"><input style={iSt} type="number" min="18" max="80" value={f.age} onChange={e=>set("age",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
-            <FF label="Province / Territory"><select style={sSt} value={f.province} onChange={e=>set("province",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}>{PROVS.map(p=><option key={p} value={p}>{p}</option>)}</select></FF>
-            <FF label="Annual Income (CAD)" hint="Pre-tax gross income"><input style={iSt} type="number" min="0" value={f.income} onChange={e=>set("income",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
-            <FF label="Employment Type"><select style={sSt} value={f.jobType} onChange={e=>set("jobType",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}><option value="employed">Full-time Employed</option><option value="parttime">Part-time</option><option value="selfemployed">Self-Employed</option><option value="contract">Contract / Freelance</option><option value="student">Student</option><option value="retired">Retired</option></select></FF>
-            <FF label="Marital Status"><select style={sSt} value={f.marital} onChange={e=>set("marital",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}><option value="single">Single</option><option value="married">Married/Common-Law</option><option value="divorced">Divorced</option></select></FF>
-            <FF label="Investment Horizon (years)" hint="When will you need this money?"><input style={iSt} type="number" min="1" max="40" value={f.horizon} onChange={e=>set("horizon",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
-            <FF label="Total Savings (CAD)" hint="All liquid savings across accounts"><input style={iSt} type="number" min="0" value={f.savingsTotal} onChange={e=>set("savingsTotal",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
-            <FF label="Monthly Savings Capacity (CAD)"><input style={iSt} type="number" min="0" value={f.monthlySavings} onChange={e=>set("monthlySavings",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
-            <FF label="Total Debt (CAD)" hint="All non-mortgage debt combined"><input style={iSt} type="number" min="0" value={f.debt} onChange={e=>set("debt",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
+            <FF label="Your Age"><input style={iSt} type="number" min="18" max="80" value={f.age} onChange={e=>set("age",e.target.value)}/></FF>
+            <FF label="Province / Territory"><select style={sSt} value={f.province} onChange={e=>set("province",e.target.value)}>{PROVS.map(p=><option key={p} value={p}>{p}</option>)}</select></FF>
+            <FF label="Annual Income (CAD)" hint="Pre-tax gross income"><input style={iSt} type="number" min="0" value={f.income} onChange={e=>set("income",e.target.value)}/></FF>
+            <FF label="Employment Type"><select style={sSt} value={f.jobType} onChange={e=>set("jobType",e.target.value)}><option value="employed">Full-time Employed</option><option value="parttime">Part-time</option><option value="selfemployed">Self-Employed</option><option value="contract">Contract / Freelance</option><option value="student">Student</option><option value="retired">Retired</option></select></FF>
+            <FF label="Marital Status"><select style={sSt} value={f.marital} onChange={e=>set("marital",e.target.value)}><option value="single">Single</option><option value="married">Married/Common-Law</option><option value="divorced">Divorced</option></select></FF>
+            <FF label="Investment Horizon (years)" hint="When will you need this money?"><input style={iSt} type="number" min="1" max="40" value={f.horizon} onChange={e=>set("horizon",e.target.value)}/></FF>
+            <FF label="Total Savings (CAD)" hint="All liquid savings across accounts"><input style={iSt} type="number" min="0" value={f.savingsTotal} onChange={e=>set("savingsTotal",e.target.value)}/></FF>
+            <FF label="Monthly Savings Capacity (CAD)"><input style={iSt} type="number" min="0" value={f.monthlySavings} onChange={e=>set("monthlySavings",e.target.value)}/></FF>
+            <FF label="Total Debt (CAD)" hint="All non-mortgage debt combined"><input style={iSt} type="number" min="0" value={f.debt} onChange={e=>set("debt",e.target.value)}/></FF>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <FF label="Existing TFSA Balance"><input style={iSt} type="number" min="0" value={f.existingTFSA} onChange={e=>set("existingTFSA",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
-              <FF label="Existing RRSP Balance"><input style={iSt} type="number" min="0" value={f.existingRRSP} onChange={e=>set("existingRRSP",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()}/></FF>
+              <FF label="Existing TFSA Balance"><input style={iSt} type="number" min="0" value={f.existingTFSA} onChange={e=>set("existingTFSA",e.target.value)}/></FF>
+              <FF label="Existing RRSP Balance"><input style={iSt} type="number" min="0" value={f.existingRRSP} onChange={e=>set("existingRRSP",e.target.value)}/></FF>
             </div>
           </div>
           <FF label="Existing Investments" hint="Be specific — AI uses this to avoid recommending what you already hold">
-            <input style={iSt} value={f.existingInvestments} onChange={e=>set("existingInvestments",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()} placeholder="e.g. $40k in XEQT via Questrade TFSA, condo worth $450k, employer pension…"/>
+            <input style={iSt} value={f.existingInvestments} onChange={e=>set("existingInvestments",e.target.value)} placeholder="e.g. $40k in XEQT via Questrade TFSA, condo worth $450k, employer pension…"/>
           </FF>
           <FF label="Financial Goals — Select All That Apply">
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -1223,7 +1244,7 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
           <FF label={`Risk Appetite — ${f.riskScore}/10 · ${RLBL[parseInt(f.riskScore)]||""}`} hint="1 = capital preservation only · 10 = max growth, can tolerate 50%+ drawdowns">
             <div style={{display:"flex",alignItems:"center",gap:14}}>
               <span style={{fontSize:11,color:T.green,fontWeight:700}}>Conservative</span>
-              <input type="range" min="1" max="10" value={f.riskScore} onChange={e=>set("riskScore",e.target.value)} onClick={e=>e.stopPropagation()} onFocus={e=>e.stopPropagation()} style={{flex:1,accentColor:T.purple}}/>
+              <input type="range" min="1" max="10" value={f.riskScore} onChange={e=>set("riskScore",e.target.value)} style={{flex:1,accentColor:T.purple}}/>
               <span style={{fontSize:11,color:T.red,fontWeight:700}}>Aggressive</span>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
@@ -1635,7 +1656,7 @@ Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
           <div style={{background:priceCol+"10",border:`1px solid ${priceCol}28`,borderRadius:9,padding:"5px 11px",display:"flex",alignItems:"center",gap:7}}>
             <div style={{width:7,height:7,borderRadius:"50%",background:priceCol,animation:"pulse 2s infinite"}}/>
             <span style={{fontSize:13,fontFamily:T.mono,color:priceCol,fontWeight:700}}>${price.toLocaleString()}</span>
-            <span style={{fontSize:8,color:T.muted,letterSpacing:1.5}}>BTC · {countdown}s</span>
+            <span style={{fontSize:8,color:T.muted,letterSpacing:1.5}}>BTC · <span ref={cdRef2}>90s</span></span>
           </div>
         </div>
       </header>
