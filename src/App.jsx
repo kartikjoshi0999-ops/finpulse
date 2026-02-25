@@ -84,42 +84,40 @@ const AUTO_MODEL = {
 };
 
 async function callAI(messages, systemPrompt = "", modelKey = "GPT-4o") {
-  const lastMsg = messages[messages.length - 1]?.content || "";
-  const fullPrompt = (systemPrompt ? systemPrompt + "\n\n" : "") + 
-    messages.map(m => (m.role === "user" ? "User: " : "Assistant: ") + m.content).join("\n");
-
-  // Provider 1: Pollinations GET (most reliable)
-  const tryPollinations = async (model) => {
-    const url = `https://text.pollinations.ai/${encodeURIComponent(fullPrompt)}?model=${model}&seed=${Date.now()%9999}`;
-    const r = await fetch(url, {signal: AbortSignal.timeout(15000)});
-    if (!r.ok) throw new Error(r.status);
-    const t = await r.text();
-    if (!t || t.length < 20) throw new Error("empty");
-    return t.trim();
+  const GROQ_KEY = import.meta.env.VITE_GROQ_KEY;
+  const modelMap = {
+    "GPT-4o": "llama-3.3-70b-versatile",
+    "GPT-4o-mini": "llama-3.1-8b-instant",
+    "Gemini Flash": "gemma2-9b-it",
+    "Mistral": "mixtral-8x7b-32768",
+    "Llama 3.3": "llama-3.3-70b-versatile"
   };
+  const groqModel = modelMap[modelKey] || "llama-3.3-70b-versatile";
 
-  // Provider 2: OpenRouter free models
-  const tryOpenRouter = async () => {
-    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {"Content-Type":"application/json","Authorization":"Bearer free","HTTP-Referer":"https://finpulse-eight.vercel.app"},
-      body: JSON.stringify({model:"mistralai/mistral-7b-instruct:free", messages:[{role:"user",content:fullPrompt}], max_tokens:400}),
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!r.ok) throw new Error(r.status);
-    const d = await r.json();
-    return d.choices?.[0]?.message?.content?.trim();
-  };
+  const msgs = [
+    ...(systemPrompt ? [{role:"system", content: systemPrompt}] : []),
+    ...messages.map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content }))
+  ];
 
-  // Try all options
-  const pollinationsModels = ["openai-large","openai","mistral","llama","gemini"];
-  for (const model of pollinationsModels) {
-    try { const t = await tryPollinations(model); if(t) return t; } catch(e) { continue; }
+  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${GROQ_KEY}`
+    },
+    body: JSON.stringify({ model: groqModel, messages: msgs, max_tokens: 500, temperature: 0.7 })
+  });
+
+  if (!r.ok) {
+    const err = await r.text();
+    throw new Error(`Groq error ${r.status}: ${err.slice(0,100)}`);
   }
-  try { const t = await tryOpenRouter(); if(t) return t; } catch(e) {}
-
-  throw new Error("AI service temporarily unavailable — please try again in a moment");
+  const d = await r.json();
+  const text = d.choices?.[0]?.message?.content;
+  if (!text) throw new Error("No response from Groq");
+  return text.trim();
 }
+
 
 /* ═══════════════════════════════════════════════════════════════════
    GLOBAL STYLES
