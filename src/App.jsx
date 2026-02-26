@@ -1,1667 +1,1248 @@
 /**
- * ╔══════════════════════════════════════════════════════════════════╗
- * ║              F I N P U L S E  —  v3.0  FINAL                   ║
- * ║      Real-Time Financial Analytics + Multi-Model AI             ║
- * ╠══════════════════════════════════════════════════════════════════╣
- * ║  Built by: [Your Name]  |  github.com/[you]/finpulse            ║
- * ║  Stack: React · Recharts · Pollinations.ai (free AI)            ║
- * ╠══════════════════════════════════════════════════════════════════╣
- * ║  AI MODELS (100% FREE — NO API KEYS REQUIRED)                   ║
- * ║  ─────────────────────────────────────────────────────────────  ║
- * ║  • GPT-4o        → via Pollinations.ai (openai-large)           ║
- * ║  • GPT-4o-mini   → via Pollinations.ai (openai)                 ║
- * ║  • Gemini Flash  → via Pollinations.ai (gemini)                 ║
- * ║  • Mistral       → via Pollinations.ai (mistral)                ║
- * ║  • Llama 3.3     → via Pollinations.ai (llama)                  ║
- * ║                                                                  ║
- * ║  HOW TO RUN:                                                     ║
- * ║  1. npm create vite@latest finpulse -- --template react          ║
- * ║  2. cd finpulse && npm install recharts                          ║
- * ║  3. Replace src/App.jsx with this file                           ║
- * ║  4. npm run dev → open http://localhost:5173                     ║
- * ║  5. Deploy: vercel.com → import GitHub repo → done              ║
- * ╚══════════════════════════════════════════════════════════════════╝
+ * FinPulse Terminal v6 — Bloomberg-Style Trading Terminal
+ * No AI · No API Keys · Pure Statistics & Mathematics
+ * React + Recharts
+ *
+ * STABILITY FIXES:
+ * - Clock in its own isolated component (no App re-render)
+ * - No key={tab} (prevents state destruction on tab switch)
+ * - All tab components defined OUTSIDE App (no re-mount on render)
+ * - All chart data via useMemo keyed to asset.s (not asset.p)
+ * - Portfolio state fully interactable
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, memo } from "react";
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, Legend,
-  ReferenceLine, RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  ComposedChart, AreaChart, Area, LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
+  PieChart, Pie, Cell,
 } from "recharts";
 
-/* ═══════════════════════════════════════════════════════════════════
-   FREE AI ENGINE — Powered by Pollinations.ai
-   No API keys. No sign-up. No cost. Works forever.
-═══════════════════════════════════════════════════════════════════ */
-const AI_MODELS = {
-  "GPT-4o": {
-    id: "openai-large",
-    color: "#10b981",
-    badge: "🟢",
-    desc: "Most powerful — complex analysis, portfolio plans",
-    best: ["portfolio", "deepanalysis", "comparison"],
-  },
-  "GPT-4o-mini": {
-    id: "openai",
-    color: "#60a5fa",
-    badge: "🔵",
-    desc: "Fast & smart — quick market takes, sentiment",
-    best: ["chat", "sentiment", "quick"],
-  },
-  "Gemini Flash": {
-    id: "gemini",
-    color: "#f59e0b",
-    badge: "🟡",
-    desc: "Google AI — great at structured data & forecasts",
-    best: ["forecast", "structured", "data"],
-  },
-  "Mistral": {
-    id: "mistral",
-    color: "#a78bfa",
-    badge: "🟣",
-    desc: "European AI — strong at risk analysis & regulation",
-    best: ["risk", "regulation", "canada"],
-  },
-  "Llama 3.3": {
-    id: "llama",
-    color: "#fb923c",
-    badge: "🟠",
-    desc: "Open source — crypto, DeFi, Web3 specialist",
-    best: ["crypto", "defi", "nft"],
-  },
-};
+/* ─────────────────────────────────────────
+   COLOURS
+───────────────────────────────────────── */
+const G   = "#00ff41";
+const R   = "#ff4040";
+const AM  = "#ffb700";
+const BL  = "#00aaff";
+const CY  = "#00ffff";
+const WH  = "#e0e0e0";
+const MU  = "#505060";
+const BG  = "#07070e";
+const BG1 = "#0c0c18";
+const BG2 = "#111120";
+const BG3 = "#161628";
+const BD  = "#1e1e32";
+const BD2 = "#282840";
+const MN  = "'Courier New',Courier,monospace";
+const PCOLS = [G, BL, AM, CY, R, "#a78bfa", "#f472b6", "#fb923c", "#2dd4bf"];
 
-// Smart model auto-selector based on task type
-const AUTO_MODEL = {
-  portfolio:  "GPT-4o",
-  forecast:   "Gemini Flash",
-  crypto:     "Llama 3.3",
-  risk:       "Mistral",
-  chat:       "GPT-4o-mini",
-  nft:        "Llama 3.3",
-  funds:      "Mistral",
-};
+/* ─────────────────────────────────────────
+   MARKET DATA
+───────────────────────────────────────── */
+const ALL_ASSETS = [
+  {s:"BTC",   name:"Bitcoin",          p:67842,  c:2.34,  mc:1320, vol:38.2, beta:1.00, pe:null, div:null, sector:"Crypto",        region:"Global"},
+  {s:"ETH",   name:"Ethereum",         p:3612,   c:1.87,  mc:430,  vol:18.6, beta:1.18, pe:null, div:null, sector:"Crypto",        region:"Global"},
+  {s:"SOL",   name:"Solana",           p:184.2,  c:5.21,  mc:81,   vol:4.2,  beta:1.42, pe:null, div:null, sector:"Crypto",        region:"Global"},
+  {s:"BNB",   name:"BNB",              p:601,    c:-0.43, mc:87,   vol:2.1,  beta:1.20, pe:null, div:null, sector:"Crypto",        region:"Asia"},
+  {s:"XRP",   name:"XRP",              p:0.582,  c:3.15,  mc:33,   vol:1.8,  beta:1.14, pe:null, div:null, sector:"Crypto",        region:"Global"},
+  {s:"AVAX",  name:"Avalanche",        p:38.9,   c:7.83,  mc:16,   vol:1.2,  beta:1.55, pe:null, div:null, sector:"Crypto",        region:"Global"},
+  {s:"LINK",  name:"Chainlink",        p:15.1,   c:4.67,  mc:8.9,  vol:0.8,  beta:1.31, pe:null, div:null, sector:"Crypto",        region:"Global"},
+  {s:"DOT",   name:"Polkadot",         p:7.44,   c:-2.14, mc:10,   vol:0.6,  beta:1.28, pe:null, div:null, sector:"Crypto",        region:"Europe"},
+  {s:"AAPL",  name:"Apple",            p:189.30, c:1.24,  mc:2930, vol:52.4, beta:1.21, pe:31.2, div:0.44, sector:"Technology",    region:"US"},
+  {s:"MSFT",  name:"Microsoft",        p:415.20, c:0.87,  mc:3080, vol:18.8, beta:0.92, pe:36.1, div:0.72, sector:"Technology",    region:"US"},
+  {s:"NVDA",  name:"NVIDIA",           p:875.40, c:3.12,  mc:2150, vol:42.1, beta:1.72, pe:72.4, div:0.03, sector:"Semiconductors",region:"US"},
+  {s:"AMZN",  name:"Amazon",           p:182.50, c:1.56,  mc:1900, vol:28.4, beta:1.18, pe:59.8, div:null, sector:"E-Commerce",    region:"US"},
+  {s:"GOOGL", name:"Alphabet",         p:155.80, c:0.94,  mc:1940, vol:22.1, beta:1.05, pe:25.3, div:null, sector:"Technology",    region:"US"},
+  {s:"META",  name:"Meta",             p:484.10, c:2.31,  mc:1240, vol:15.2, beta:1.32, pe:28.4, div:0.40, sector:"Social Media",  region:"US"},
+  {s:"TSLA",  name:"Tesla",            p:248.20, c:-1.88, mc:792,  vol:88.4, beta:2.01, pe:62.1, div:null, sector:"Automotive",    region:"US"},
+  {s:"JPM",   name:"JPMorgan",         p:197.40, c:0.78,  mc:567,  vol:8.4,  beta:1.12, pe:12.1, div:2.04, sector:"Banking",       region:"US"},
+  {s:"V",     name:"Visa",             p:272.80, c:0.55,  mc:573,  vol:6.2,  beta:0.94, pe:30.8, div:0.76, sector:"Payments",      region:"US"},
+  {s:"BRK.B", name:"Berkshire",        p:387.60, c:0.42,  mc:848,  vol:3.8,  beta:0.88, pe:21.4, div:null, sector:"Financials",    region:"US"},
+  {s:"RY.TO", name:"Royal Bank",       p:134.20, c:0.62,  mc:190,  vol:4.2,  beta:0.88, pe:13.4, div:3.72, sector:"Banking",       region:"Canada"},
+  {s:"TD.TO", name:"TD Bank",          p:82.50,  c:-0.34, mc:150,  vol:6.8,  beta:0.84, pe:11.8, div:4.90, sector:"Banking",       region:"Canada"},
+  {s:"SHOP.TO",name:"Shopify",         p:112.40, c:2.14,  mc:144,  vol:3.4,  beta:1.48, pe:78.2, div:null, sector:"E-Commerce",    region:"Canada"},
+  {s:"ENB.TO",name:"Enbridge",         p:51.30,  c:0.88,  mc:107,  vol:8.2,  beta:0.68, pe:18.2, div:7.44, sector:"Energy",        region:"Canada"},
+  {s:"CNR.TO",name:"CN Rail",          p:168.90, c:0.44,  mc:119,  vol:2.8,  beta:0.78, pe:20.1, div:1.94, sector:"Transport",     region:"Canada"},
+  {s:"SU.TO", name:"Suncor",           p:55.60,  c:1.24,  mc:58,   vol:5.4,  beta:1.18, pe:9.8,  div:4.10, sector:"Energy",        region:"Canada"},
+  {s:"BCE.TO",name:"BCE",              p:46.20,  c:-0.72, mc:42,   vol:4.1,  beta:0.62, pe:16.4, div:9.12, sector:"Telecom",       region:"Canada"},
+  {s:"ASML",  name:"ASML Holding",     p:876.20, c:1.44,  mc:344,  vol:2.1,  beta:1.24, pe:44.2, div:0.78, sector:"Semiconductors",region:"Europe"},
+  {s:"LVMH",  name:"LVMH",             p:742.80, c:-0.32, mc:373,  vol:1.8,  beta:1.08, pe:22.1, div:1.82, sector:"Luxury",        region:"Europe"},
+  {s:"NOVO",  name:"Novo Nordisk",     p:112.30, c:2.12,  mc:497,  vol:4.2,  beta:0.78, pe:38.2, div:1.18, sector:"Pharma",        region:"Europe"},
+  {s:"SAP",   name:"SAP SE",           p:186.40, c:0.88,  mc:225,  vol:3.1,  beta:0.92, pe:32.4, div:1.20, sector:"Software",      region:"Europe"},
+  {s:"SHELL", name:"Shell PLC",        p:32.80,  c:0.64,  mc:222,  vol:8.4,  beta:0.88, pe:11.2, div:3.96, sector:"Energy",        region:"Europe"},
+  {s:"TSM",   name:"TSMC",             p:142.80, c:2.88,  mc:741,  vol:12.4, beta:1.18, pe:28.4, div:1.22, sector:"Semiconductors",region:"Asia"},
+  {s:"BABA",  name:"Alibaba",          p:76.40,  c:-0.88, mc:186,  vol:18.4, beta:0.92, pe:9.2,  div:null, sector:"E-Commerce",    region:"Asia"},
+  {s:"TCS.NS",name:"TCS India",        p:3842,   c:0.68,  mc:139,  vol:4.2,  beta:0.82, pe:28.2, div:1.44, sector:"IT Services",   region:"Asia"},
+  {s:"SPY",   name:"SPDR S&P 500",     p:512.40, c:0.82,  mc:504,  vol:68.4, beta:1.00, pe:22.1, div:1.28, sector:"Broad Market",  region:"US"},
+  {s:"QQQ",   name:"Nasdaq 100",       p:438.20, c:1.24,  mc:230,  vol:42.1, beta:1.18, pe:28.4, div:0.52, sector:"Technology",    region:"US"},
+  {s:"GLD",   name:"SPDR Gold",        p:218.40, c:0.88,  mc:57,   vol:12.4, beta:0.08, pe:null, div:null, sector:"Commodities",   region:"Global"},
+  {s:"AGG",   name:"US Bond ETF",      p:98.40,  c:0.12,  mc:107,  vol:8.4,  beta:0.14, pe:null, div:3.42, sector:"Bonds",         region:"US"},
+  {s:"VFV.TO",name:"Vanguard S&P CAD", p:142.80, c:0.81,  mc:12.8, vol:4.2,  beta:0.98, pe:22.0, div:1.10, sector:"Broad Market",  region:"Canada"},
+  {s:"XEQT.TO",name:"iShares Equity",  p:32.40,  c:0.68,  mc:8.4,  vol:3.8,  beta:0.94, pe:21.2, div:1.42, sector:"Broad Market",  region:"Canada"},
+  {s:"XIC.TO",name:"iShares TSX",      p:38.20,  c:0.44,  mc:11.2, vol:5.2,  beta:0.88, pe:16.4, div:2.84, sector:"Canada",        region:"Canada"},
+  {s:"EEM",   name:"Emerging Markets", p:42.80,  c:0.42,  mc:18.4, vol:28.4, beta:1.12, pe:12.8, div:2.14, sector:"Emerging Mkts", region:"EM"},
+];
 
-async function callAI(messages, systemPrompt = "", modelKey = "GPT-4o") {
-  const sys = systemPrompt || "You are a helpful financial analyst. Be concise and insightful.";
-  const allMsgs = [
-    {role:"system", content: sys},
-    ...messages.map(m => ({role: m.role==="assistant"?"assistant":"user", content: m.content}))
-  ];
-  const models = ["mistral", "openai", "llama", "gemini", "openai-large"];
-  for (const model of models) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 20000);
-      const r = await fetch("https://text.pollinations.ai/", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({messages: allMsgs, model, private: true, seed: Math.floor(Math.random()*9999)}),
-        signal: ctrl.signal
-      });
-      clearTimeout(timer);
-      if (!r.ok) continue;
-      const t = await r.text();
-      if (t && t.trim().length > 20 && !t.startsWith("<!")) return t.trim();
-    } catch(e) { continue; }
+const FOREX_DATA = [
+  {pair:"USD/CAD",rate:1.3624,c:-0.12,open:1.3640,h:1.3672,l:1.3588,spread:"0.3"},
+  {pair:"EUR/USD",rate:1.0842,c:0.18, open:1.0824,h:1.0891,l:1.0808,spread:"0.1"},
+  {pair:"GBP/USD",rate:1.2724,c:0.24, open:1.2694,h:1.2782,l:1.2688,spread:"0.2"},
+  {pair:"USD/JPY",rate:149.82,c:-0.34,open:150.33,h:150.48,l:149.21,spread:"0.4"},
+  {pair:"AUD/USD",rate:0.6512,c:0.44, open:0.6484,h:0.6561,l:0.6478,spread:"0.5"},
+  {pair:"USD/CHF",rate:0.8842,c:-0.08,open:0.8849,h:0.8872,l:0.8814,spread:"0.3"},
+  {pair:"USD/CNY",rate:7.2140,c:0.02, open:7.2124,h:7.2198,l:7.2048,spread:"1.2"},
+  {pair:"CAD/JPY",rate:110.04,c:-0.22,open:110.28,h:110.62,l:109.82,spread:"0.6"},
+  {pair:"EUR/GBP",rate:0.8520,c:0.08, open:0.8513,h:0.8534,l:0.8501,spread:"0.2"},
+  {pair:"EUR/JPY",rate:162.44,c:-0.14,open:162.67,h:162.88,l:162.21,spread:"0.5"},
+];
+
+const FX_RATES = {USD:1,CAD:1.3624,EUR:0.9224,GBP:0.7862,JPY:149.82,AUD:1.5358,CHF:0.8842,CNY:7.2140,MXN:17.18,INR:83.12};
+
+/* ─────────────────────────────────────────
+   STATISTICS ENGINE
+───────────────────────────────────────── */
+function gaussRng() {
+  let u=0,v=0;
+  while(!u) u=Math.random();
+  while(!v) v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+// Seeded random so charts don't change on every render
+function seededRng(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 0xffffffff;
+  };
+}
+
+function genHistory(base, symbol) {
+  const rng = seededRng(symbol.split("").reduce((a,c)=>a+c.charCodeAt(0),0));
+  const sigma = base > 10000 ? 0.018 : base > 1000 ? 0.022 : base > 10 ? 0.030 : 0.042;
+  let p = base * 0.85;
+  const data = [];
+  const now = new Date(2026, 1, 26); // fixed date so no re-gen
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(now); d.setDate(d.getDate() - i);
+    const open = p;
+    const ret = (rng() - 0.49) * sigma;
+    const close = Math.max(base * 0.3, p * (1 + ret));
+    const hi = Math.max(open, close) * (1 + rng() * sigma * 0.4);
+    const lo = Math.min(open, close) * (1 - rng() * sigma * 0.4);
+    data.push({
+      t: `${d.getMonth()+1}/${d.getDate()}`,
+      o: +open.toFixed(base < 1 ? 5 : 2),
+      h: +hi.toFixed(base < 1 ? 5 : 2),
+      l: +lo.toFixed(base < 1 ? 5 : 2),
+      c: +close.toFixed(base < 1 ? 5 : 2),
+      v: Math.round(rng() * 1500000 + 400000),
+      ret,
+    });
+    p = close;
   }
-  throw new Error("AI temporarily unavailable — please try again");
+  return data;
 }
 
-
-/* ═══════════════════════════════════════════════════════════════════
-   GLOBAL STYLES
-═══════════════════════════════════════════════════════════════════ */
-const GCSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-  html,body,#root{height:100%;background:#060710;}
-  ::-webkit-scrollbar{width:4px;height:4px;}
-  ::-webkit-scrollbar-track{background:transparent;}
-  ::-webkit-scrollbar-thumb{background:#1e2240;border-radius:4px;}
-  @keyframes pulse   {0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
-  @keyframes blink   {0%,100%{opacity:1}50%{opacity:.1}}
-  @keyframes fadeUp  {from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
-  @keyframes sweep   {from{transform:rotate(-90deg)}}
-  @keyframes ticker  {0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
-  @keyframes spin    {to{transform:rotate(360deg)}}
-  @keyframes shimmer {0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
-  @keyframes glow    {0%,100%{box-shadow:0 0 8px #4ade8044}50%{box-shadow:0 0 20px #4ade8088}}
-  input:focus,select:focus,textarea:focus{outline:none;border-color:#3d4a80!important;box-shadow:0 0 0 3px #4ade8010;}
-  button{cursor:pointer;transition:all .16s ease;font-family:inherit;border:none;}
-  button:disabled{opacity:.35;cursor:not-allowed;transform:none!important;}
-  button:not(:disabled):hover{opacity:.88;transform:translateY(-1px);}
-  button:not(:disabled):active{transform:scale(.97)!important;}
-  select{cursor:pointer;font-family:inherit;}
-  .fade-up{animation:fadeUp .42s cubic-bezier(.16,1,.3,1) both;}
-  .shimmer{animation:shimmer 1.8s ease-in-out infinite;}
-`;
-
-/* ═══════════════════════════════════════════════════════════════════
-   DESIGN TOKENS
-═══════════════════════════════════════════════════════════════════ */
-const T = {
-  bg0:"#060710", bg1:"#090b18", bg2:"#0d0f20", bg3:"#111328",
-  border:"#14162a", border2:"#1e2240", border3:"#252a50",
-  green:"#4ade80", red:"#f87171", blue:"#60a5fa",
-  purple:"#a78bfa", orange:"#fb923c", yellow:"#fbbf24",
-  teal:"#2dd4bf", pink:"#f472b6", indigo:"#818cf8",
-  muted:"#4b5563", dim:"#181a2e", text:"#dde4f0", sub:"#8892a4",
-  mono:"JetBrains Mono,monospace", sans:"Inter,sans-serif",
-};
-
-/* ═══════════════════════════════════════════════════════════════════
-   STATIC DATA
-═══════════════════════════════════════════════════════════════════ */
-const CRYPTOS = [
-  {r:1, name:"Bitcoin",    s:"BTC",  p:67842,     c:2.34,  mc:"$1.32T",v:"$38.2B",sent:82,vol7:[60,62,59,68,72,74,78,80,76,82,85,84,82,79,82]},
-  {r:2, name:"Ethereum",   s:"ETH",  p:3612,      c:1.87,  mc:"$430B", v:"$18.6B",sent:76,vol7:[55,58,52,61,65,68,72,74,70,76,78,77,75,73,76]},
-  {r:3, name:"Solana",     s:"SOL",  p:184.2,     c:5.21,  mc:"$81B",  v:"$4.2B", sent:88,vol7:[70,72,75,80,82,85,86,88,87,88,90,89,88,86,88]},
-  {r:4, name:"BNB",        s:"BNB",  p:601,       c:-0.43, mc:"$87B",  v:"$2.1B", sent:61,vol7:[58,60,62,61,59,60,63,62,61,61,62,60,61,60,61]},
-  {r:5, name:"XRP",        s:"XRP",  p:0.582,     c:3.15,  mc:"$33B",  v:"$1.8B", sent:71,vol7:[60,62,65,68,70,71,72,71,70,71,72,70,71,70,71]},
-  {r:6, name:"Cardano",    s:"ADA",  p:0.481,     c:-1.22, mc:"$17B",  v:"$0.9B", sent:55,vol7:[50,52,54,53,52,55,56,55,54,55,56,55,54,53,55]},
-  {r:7, name:"Avalanche",  s:"AVAX", p:38.9,      c:7.83,  mc:"$16B",  v:"$1.2B", sent:91,vol7:[72,75,80,82,85,87,88,90,89,91,92,91,90,89,91]},
-  {r:8, name:"Polkadot",   s:"DOT",  p:7.44,      c:-2.14, mc:"$10B",  v:"$0.6B", sent:38,vol7:[45,43,42,40,38,39,40,38,37,38,39,38,37,37,38]},
-  {r:9, name:"Chainlink",  s:"LINK", p:15.1,      c:4.67,  mc:"$8.9B", v:"$0.8B", sent:79,vol7:[65,68,70,72,74,76,78,79,77,79,80,79,78,77,79]},
-  {r:10,name:"Dogecoin",   s:"DOGE", p:0.143,     c:-3.78, mc:"$20B",  v:"$1.4B", sent:22,vol7:[35,32,30,28,25,24,22,23,22,22,23,22,21,21,22]},
-  {r:11,name:"Shiba Inu",  s:"SHIB", p:0.0000095, c:-2.11, mc:"$5.6B", v:"$0.4B", sent:31,vol7:[40,38,35,33,31,32,31,30,31,31,32,31,30,30,31]},
-  {r:12,name:"Sui",        s:"SUI",  p:1.88,      c:4.22,  mc:"$5.1B", v:"$0.7B", sent:86,vol7:[68,70,75,78,80,82,84,85,84,86,87,86,85,84,86]},
-  {r:13,name:"Injective",  s:"INJ",  p:22.7,      c:3.55,  mc:"$2.1B", v:"$0.5B", sent:84,vol7:[65,68,72,75,78,80,82,83,82,84,85,84,83,82,84]},
-  {r:14,name:"Render",     s:"RNDR", p:8.3,       c:6.11,  mc:"$3.2B", v:"$0.6B", sent:80,vol7:[62,65,68,72,74,76,78,79,78,80,81,80,79,78,80]},
-  {r:15,name:"Filecoin",   s:"FIL",  p:4.72,      c:-4.33, mc:"$2.3B", v:"$0.3B", sent:24,vol7:[38,35,32,28,26,24,25,24,23,24,25,24,23,23,24]},
-];
-
-const NFTS = [
-  {name:"Bored Ape YC",   sym:"BAYC", floor:"12.4",fUSD:"$43.4k",chg:8.2,  vol:"142",owners:6400,sent:84,weekVol:[110,120,115,130,125,138,142]},
-  {name:"CryptoPunks",    sym:"PUNK", floor:"48.2",fUSD:"$169k", chg:-2.1, vol:"89", owners:3500,sent:72,weekVol:[95,92,90,88,91,89,89]},
-  {name:"Azuki",          sym:"AZUK", floor:"6.8", fUSD:"$23.8k",chg:15.3, vol:"218",owners:5200,sent:93,weekVol:[120,140,155,175,190,205,218]},
-  {name:"Doodles",        sym:"DOOD", floor:"2.1", fUSD:"$7.4k", chg:-5.4, vol:"34", owners:5000,sent:31,weekVol:[50,48,44,40,37,35,34]},
-  {name:"CloneX",         sym:"CLNX", floor:"3.9", fUSD:"$13.7k",chg:3.7,  vol:"67", owners:9800,sent:68,weekVol:[58,60,62,63,65,66,67]},
-  {name:"Pudgy Penguins", sym:"PUDG", floor:"8.2", fUSD:"$28.7k",chg:11.4, vol:"98", owners:4100,sent:87,weekVol:[72,76,80,85,88,94,98]},
-];
-
-const FUNDS = [
-  {name:"Vanguard S&P 500",  t:"VFINX",nav:482.3,ytd:18.4,r1:26.3,r3:10.1,exp:"0.04%",type:"Index",  stars:5,risk:"Low"},
-  {name:"Fidelity Growth",   t:"FDGRX",nav:218.7,ytd:24.1,r1:31.2,r3:14.8,exp:"0.47%",type:"Growth", stars:5,risk:"Med-High"},
-  {name:"T. Rowe Blue Chip", t:"TRBCX",nav:148.2,ytd:16.8,r1:22.4,r3:9.6, exp:"0.69%",type:"Blend",  stars:4,risk:"Medium"},
-  {name:"Ark Innovation",    t:"ARKK", nav:52.4, ytd:-8.2, r1:18.7,r3:-14.2,exp:"0.75%",type:"Thematic",stars:2,risk:"Very High"},
-  {name:"Schwab Total Mkt",  t:"SWTSX",nav:84.6, ytd:17.2,r1:25.1,r3:9.4, exp:"0.03%",type:"Index",  stars:4,risk:"Low"},
-  {name:"iShares Nasdaq 100",t:"ONEQ", nav:62.3, ytd:21.8,r1:29.4,r3:12.1,exp:"0.21%",type:"ETF",    stars:5,risk:"Medium"},
-];
-
-const BEST_PICKS = [
-  {s:"SUI", name:"Sui Network",   p:1.88, target:"+180%",why:"Layer-1 Move VM. TVL up 340% QoQ. Institutional inflows accelerating. Ecosystem DeFi protocols surging.",bull:89,tags:["Layer-1","DeFi","AI"],model:"Llama 3.3"},
-  {s:"INJ", name:"Injective",     p:22.7, target:"+120%",why:"DeFi derivatives hub expanding into AI-powered trading. Unique burn mechanic reducing supply.",             bull:85,tags:["DeFi","Deriv","Cosmos"],model:"GPT-4o"},
-  {s:"RNDR",name:"Render Network",p:8.3,  target:"+95%", why:"GPU compute at intersection of AI + crypto. Developer growth +280% YoY. NVIDIA partnership signals.",       bull:81,tags:["AI","Compute","SOL"],model:"Gemini Flash"},
-  {s:"LINK",name:"Chainlink",     p:15.1, target:"+75%", why:"Oracle monopoly. CCIP cross-chain expanding. Enterprise adoption and staking v0.2 improving tokenomics.",    bull:79,tags:["Oracle","Enterprise"],model:"Mistral"},
-];
-const WORST_PICKS = [
-  {s:"LUNC",name:"Terra Classic",p:0.00009,  risk:"-85%",why:"Zombie chain. No dev activity, abandoned roadmap, hyperinflationary emission schedule.",     bear:7,  tags:["Dead","Inflation","Avoid"],model:"GPT-4o"},
-  {s:"SHIB",name:"Shiba Inu",    p:0.0000095,risk:"-70%",why:"590 trillion token supply. Meme coin with fading retail interest and no institutional use case.",bear:14, tags:["Meme","Supply Risk"],model:"Llama 3.3"},
-  {s:"FIL", name:"Filecoin",     p:4.72,     risk:"-55%",why:"Storage narrative fading. Heavy VC unlock schedule through 2025. Competitor growth eroding moat.",bear:24, tags:["Storage","VC Unlocks"],model:"Gemini Flash"},
-];
-const INIT_FEED = [
-  {u:"crypto_whale", txt:"BTC breaking ATH soon. All on-chain signals green. Accumulating heavily 🚀",          bull:true, asset:"BTC", sc:91,ago:"2m"},
-  {u:"bear_mkt_bro", txt:"This entire rally is manufactured. Macro conditions still terrible. Stay safe.",       bull:false,asset:"ETH", sc:12,ago:"5m"},
-  {u:"sol_maxi",     txt:"SOL ecosystem absolutely exploding. Dev activity up 40% this quarter. Bullish!",       bull:true, asset:"SOL", sc:88,ago:"7m"},
-  {u:"defi_degen",   txt:"AVAX farms paying 22% APY right now. Been verified for 3 weeks straight.",             bull:true, asset:"AVAX",sc:74,ago:"12m"},
-  {u:"nft_alpha",    txt:"Azuki floor up 15% overnight. Strongest NFT recovery momentum in months.",             bull:true, asset:"NFT", sc:87,ago:"14m"},
-  {u:"macro_watcher",txt:"NFT market volumes dying. Down 80% from peak. Exit before the next leg down.",         bull:false,asset:"NFT", sc:9, ago:"18m"},
-  {u:"moonboi99",    txt:"ADA forming massive breakout pattern on weekly. Will watch closely 📈",                bull:true, asset:"ADA", sc:77,ago:"21m"},
-  {u:"risk_mgr_pro", txt:"PSA: Never allocate more than 5% to any single crypto. Risk management first.",        bull:null, asset:"MKT", sc:50,ago:"25m"},
-  {u:"alpha_seeker", txt:"LINK oracle monopoly about to expand massively with CCIP. Undervalued gem.",           bull:true, asset:"LINK",sc:83,ago:"28m"},
-  {u:"realist_rex",  txt:"Most altcoins will be down 80%+ in 2 years. BTC dominance only safe bet.",            bull:false,asset:"MKT", sc:18,ago:"31m"},
-];
-
-/* ─── Sentiment zones ──────────────────────────────────────────── */
-const ZONES = [
-  {labels:["Extremely","Bearish"],from:0, to:20,fill:"#7f1d1d",glow:"#ef4444"},
-  {labels:["Bearish"],            from:20,to:40,fill:"#991b1b",glow:"#f87171"},
-  {labels:["Neutral"],            from:40,to:60,fill:"#2d3748",glow:"#94a3b8"},
-  {labels:["Bullish"],            from:60,to:80,fill:"#065f46",glow:"#4ade80"},
-  {labels:["Extremely","Bullish"],from:80,to:100,fill:"#064e3b",glow:"#22c55e"},
-];
-const sentMeta = sc => ZONES.find(z => sc >= z.from && sc < z.to) ?? ZONES[4];
-
-/* ─── Data generators ──────────────────────────────────────────── */
-const genSpark = (base,vol,n=40)=>[...Array(n)].map((_,i)=>({t:i,v:Math.max(base*.85,base+(Math.random()-.47)*vol*(.2+i/n))}));
-
-function genIntraday(base,vol,pts,lblFn){
-  let p=base;
-  return [...Array(pts)].map((_,i)=>{p=Math.max(base*.82,p+(Math.random()-.48)*vol);return{label:lblFn(i),v:+p.toFixed(2),vol:Math.round(Math.random()*1000000)};});
+function calcEMA(arr, n) {
+  const k = 2 / (n + 1);
+  let e = arr[0];
+  return arr.map(v => { e = v * k + e * (1 - k); return +e.toFixed(6); });
 }
 
-function genForecast(base,months,bull,baseR,bear){
-  const now=new Date();
-  return [...Array(months+1)].map((_,m)=>{
-    const d=new Date(now);d.setMonth(d.getMonth()+m);
-    const n=1+(Math.random()-.5)*.07;
-    return{
-      label:m===0?"Now":d.toLocaleString("default",{month:"short",year:"2-digit"}),
-      bull:+(base*Math.pow(1+bull/months,m)*n).toFixed(0),
-      base:+(base*Math.pow(1+baseR/months,m)*n).toFixed(0),
-      bear:+(base*Math.pow(1+bear/months,m)*n).toFixed(0),
-    };
-  });
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   SENTIMENT GAUGE COMPONENT
-═══════════════════════════════════════════════════════════════════ */
-function SentGauge({score=68,size=280,title="",sub=""}){
-  const cx=size/2,cy=size*.58,R=size*.40,sw=size*.115;
-  const pt=(d,r)=>{const rad=(d-180)*Math.PI/180;return[cx+r*Math.cos(rad),cy+r*Math.sin(rad)];};
-  const arc=(f,t,r)=>{const a1=f*1.8,a2=t*1.8,[x1,y1]=pt(a1,r),[x2,y2]=pt(a2,r);return`M${x1},${y1} A${r},${r},0,${a2-a1>90?1:0},1,${x2},${y2}`;};
-  const nDeg=Math.min(99.9,score)*1.8,nRad=(nDeg-180)*Math.PI/180;
-  const tip=pt(nDeg,R-sw*.52),base=pt(nDeg,R-sw*1.1);
-  const px=Math.sin(nRad)*5,py=-Math.cos(nRad)*5,meta=sentMeta(score);
-  return(
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-      {title&&<div style={{fontSize:15,fontWeight:700,color:T.text,letterSpacing:-.3}}>{title}</div>}
-      {sub&&<div style={{fontSize:11,color:T.muted,lineHeight:1.55,textAlign:"center",maxWidth:290,fontFamily:T.sans}}>{sub}</div>}
-      <svg width={size} height={cy+20} viewBox={`0 0 ${size} ${cy+20}`} style={{overflow:"visible"}}>
-        <path d={arc(0,100,R)} fill="none" stroke="#04050c" strokeWidth={sw+10} strokeLinecap="butt"/>
-        <path d={arc(0,100,R)} fill="none" stroke="#12142a" strokeWidth={sw}    strokeLinecap="butt"/>
-        {ZONES.map((z,i)=>{const a=score>=z.from&&score<z.to;return(
-          <g key={i}>
-            {a&&<path d={arc(z.from,z.to,R)} fill="none" stroke={z.glow} strokeWidth={sw+12} strokeLinecap="butt" opacity={.08}/>}
-            <path d={arc(z.from,z.to,R)} fill="none" stroke={a?z.glow:z.fill} strokeWidth={sw-(a?0:3)} strokeLinecap="butt" opacity={a?1:.5}/>
-          </g>
-        );})}
-        {[20,40,60,80].map(v=>{const[ox,oy]=pt(v*1.8,R+2),[ix,iy]=pt(v*1.8,R-sw-2);return<line key={v} x1={ox} y1={oy} x2={ix} y2={iy} stroke="#060710" strokeWidth={3.5}/>;} )}
-        {ZONES.map((z,i)=>{
-          const mid=(z.from+z.to)/2,[lx,ly]=pt(mid*1.8,R-sw*.5),a=score>=z.from&&score<z.to;
-          return z.labels.map((ln,li)=>(<text key={i+"-"+li} x={lx} y={ly+(li-(z.labels.length-1)/2)*12} fill={a?z.glow:"#6b7280"} fontSize={size*.039} fontFamily={T.sans} fontWeight={600} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${mid*1.8-90},${lx},${ly})`}>{ln}</text>));
-        })}
-        {[0,25,50,75,100].map(v=>{const[tx,ty]=pt(v*1.8,R+sw*.74);return<text key={v} x={tx} y={ty} fill="#2d3460" fontSize={size*.042} fontFamily={T.mono} textAnchor="middle" dominantBaseline="middle">{v}</text>;})}
-        <polygon points={`${tip[0]},${tip[1]} ${base[0]+px},${base[1]+py} ${base[0]-px},${base[1]-py}`} fill="#0d0f20" stroke={meta.glow+"88"} strokeWidth={1.5} style={{transformOrigin:`${cx}px ${cy}px`,animation:"sweep 1.1s cubic-bezier(.34,1.56,.64,1) both"}}/>
-        <circle cx={cx} cy={cy} r={size*.055} fill="#0a0c1a" stroke={meta.glow} strokeWidth={2.5}/>
-        <circle cx={cx} cy={cy} r={R-sw*1.5} fill={meta.glow+"10"} stroke={meta.glow+"28"} strokeWidth={1.5}/>
-        <text x={cx} y={cy-4} fill={meta.glow} fontSize={size*.14} fontFamily={T.mono} fontWeight={700} textAnchor="middle" dominantBaseline="middle">{score}</text>
-      </svg>
-      <div style={{fontSize:13,fontWeight:700,color:meta.glow,letterSpacing:1.5,textTransform:"uppercase",marginTop:-6}}>{meta.labels.join(" ")}</div>
-    </div>
+function calcSMA(arr, n) {
+  return arr.map((_, i) =>
+    i < n - 1 ? null : +(arr.slice(i - n + 1, i + 1).reduce((a, b) => a + b, 0) / n).toFixed(6)
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SHARED UI COMPONENTS
-═══════════════════════════════════════════════════════════════════ */
-const Card=({c,style={},className=""})=><div className={className} style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16,...style}}>{c}</div>;
-const Sec=({dot,children,style={}})=><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,...style}}>{dot&&<span style={{width:7,height:7,borderRadius:"50%",background:dot,boxShadow:`0 0 8px ${dot}`,flexShrink:0}}/>}<span style={{fontSize:10,fontWeight:700,letterSpacing:2.5,color:T.muted,textTransform:"uppercase"}}>{children}</span></div>;
-const Chip=({color=T.purple,children,style={}})=><span style={{background:color+"18",color,border:`1px solid ${color}35`,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:600,whiteSpace:"nowrap",...style}}>{children}</span>;
-const Pct=({v})=><span style={{color:v>=0?T.green:T.red,fontWeight:700,fontFamily:T.mono,fontSize:13}}>{v>=0?"▲":"▼"}{Math.abs(v).toFixed(2)}%</span>;
-const Spinner=({color=T.purple,size=16})=><span style={{display:"inline-block",width:size,height:size,borderRadius:"50%",border:`2px solid ${color}30`,borderTopColor:color,animation:"spin .8s linear infinite",flexShrink:0}}/>;
-const SentBar=({sc})=>{const m=sentMeta(sc);return(<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:m.glow,fontWeight:700,minWidth:26,fontFamily:T.mono}}>{sc}</span><div style={{flex:1,height:4,background:T.dim,borderRadius:3,overflow:"hidden"}}><div style={{width:`${sc}%`,height:"100%",background:`linear-gradient(90deg,${m.glow}55,${m.glow})`,borderRadius:3,transition:"width .6s ease"}}/></div><span style={{fontSize:10,color:T.muted,minWidth:64,textAlign:"right"}}>{m.labels.join(" ")}</span></div>);};
-const MiniSpark=({data,color,h=55})=>{const id=`g${color.replace(/[^0-9a-f]/gi,"")}`;return(<ResponsiveContainer width="100%" height={h}><AreaChart data={data} margin={{top:2,right:0,bottom:0,left:0}}><defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={.4}/><stop offset="95%" stopColor={color} stopOpacity={0}/></linearGradient></defs><Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#${id})`} dot={false}/></AreaChart></ResponsiveContainer>);};
-const CTip=({active,payload,label,prefix="$",dec=0})=>{if(!active||!payload?.length)return null;return(<div style={{background:T.bg3,border:`1px solid ${T.border2}`,borderRadius:8,padding:"8px 12px",fontSize:12}}><div style={{color:T.sub,marginBottom:4}}>{label}</div>{payload.map((p,i)=><div key={i} style={{color:p.color||T.text,fontWeight:600}}>{p.name||"Value"}: {prefix}{Number(p.value).toLocaleString(undefined,{maximumFractionDigits:dec})}</div>)}</div>);};
+function calcRSI(closes, n = 14) {
+  const out = Array(n).fill(null);
+  const d = closes.slice(1).map((c, i) => c - closes[i]);
+  let ag = d.slice(0, n).filter(x => x > 0).reduce((a, b) => a + b, 0) / n;
+  let al = d.slice(0, n).filter(x => x < 0).map(Math.abs).reduce((a, b) => a + b, 0) / n;
+  out.push(al === 0 ? 100 : +(100 - 100 / (1 + ag / al)).toFixed(2));
+  for (let i = n; i < d.length; i++) {
+    ag = (ag * (n - 1) + (d[i] > 0 ? d[i] : 0)) / n;
+    al = (al * (n - 1) + (d[i] < 0 ? Math.abs(d[i]) : 0)) / n;
+    out.push(al === 0 ? 100 : +(100 - 100 / (1 + ag / al)).toFixed(2));
+  }
+  return out;
+}
 
-/* ─── Form field wrapper ─────────────────────────────────────────── */
-const FF=({label,hint,children,style={}})=>(
-  <div style={{marginBottom:16,...style}}>
-    <label style={{display:"block",fontSize:11,fontWeight:600,color:T.sub,letterSpacing:1.2,marginBottom:6,textTransform:"uppercase"}}>{label}</label>
-    {children}
-    {hint&&<div style={{fontSize:11,color:T.muted,marginTop:4}}>{hint}</div>}
+function calcMACD(closes) {
+  const e12 = calcEMA(closes, 12);
+  const e26 = calcEMA(closes, 26);
+  const macd = e12.map((v, i) => +(v - e26[i]).toFixed(6));
+  const sig  = calcEMA(macd, 9);
+  const hist = macd.map((v, i) => +(v - sig[i]).toFixed(6));
+  return { macd, sig, hist };
+}
+
+function calcBB(closes, n = 20, k = 2) {
+  return closes.map((_, i) => {
+    if (i < n - 1) return { mid: null, up: null, lo: null };
+    const sl = closes.slice(i - n + 1, i + 1);
+    const m  = sl.reduce((a, b) => a + b, 0) / n;
+    const sd = Math.sqrt(sl.reduce((a, b) => a + (b - m) ** 2, 0) / n);
+    return { mid: +m.toFixed(4), up: +(m + k * sd).toFixed(4), lo: +(m - k * sd).toFixed(4) };
+  });
+}
+
+function calcVaR(rets, conf = 0.95) {
+  return +([...rets].sort((a, b) => a - b)[Math.floor((1 - conf) * rets.length)] * 100).toFixed(2);
+}
+
+function calcSharpe(rets, rf = 0.0525) {
+  const m = rets.reduce((a, b) => a + b, 0) / rets.length;
+  const s = Math.sqrt(rets.reduce((a, b) => a + (b - m) ** 2, 0) / rets.length);
+  return s === 0 ? 0 : +((m * 252 - rf) / (s * Math.sqrt(252))).toFixed(2);
+}
+
+function monteCarlo(price, mu, sigma, days = 252, paths = 300) {
+  const dt = 1 / 252;
+  const allPaths = [];
+  for (let p = 0; p < paths; p++) {
+    let s = price;
+    const path = [s];
+    for (let d = 0; d < days; d++) {
+      s = Math.max(price * 0.05, s * Math.exp((mu - sigma ** 2 / 2) * dt + sigma * Math.sqrt(dt) * gaussRng()));
+      path.push(+s.toFixed(2));
+    }
+    allPaths.push(path);
+  }
+  const step = Math.ceil(days / 24);
+  const summary = [];
+  for (let d = 0; d <= days; d += step) {
+    const vals = allPaths.map(p => p[Math.min(d, days)]).sort((a, b) => a - b);
+    const n = vals.length;
+    summary.push({ day: d, p10: vals[Math.floor(n * 0.10)], p25: vals[Math.floor(n * 0.25)], p50: vals[Math.floor(n * 0.50)], p75: vals[Math.floor(n * 0.75)], p90: vals[Math.floor(n * 0.90)] });
+  }
+  return summary;
+}
+
+function dcfCalc(fcf, growth, terminal, wacc, shares, years = 10) {
+  let pv = 0, cf = fcf * 1e9;
+  for (let y = 1; y <= years; y++) { cf *= (1 + growth); pv += cf / Math.pow(1 + wacc, y); }
+  const tv = (cf * (1 + terminal)) / (wacc - terminal);
+  return +((pv + tv / Math.pow(1 + wacc, years)) / (shares * 1e9)).toFixed(2);
+}
+
+function bsGreeks(S, K, T, r, sigma, type = "call") {
+  if (T <= 0) return { price: Math.max(0, type === "call" ? S - K : K - S), delta: type === "call" ? 1 : -1, gamma: 0, theta: 0, vega: 0, rho: 0 };
+  const d1 = (Math.log(S / K) + (r + sigma * sigma / 2) * T) / (sigma * Math.sqrt(T));
+  const d2 = d1 - sigma * Math.sqrt(T);
+  const Nc = x => { const t = 1 / (1 + 0.2316419 * Math.abs(x)); const p = 1 - (((((1.330274429 * t - 1.821255978) * t + 1.781477937) * t - 0.356563782) * t + 0.31938153) * t) * Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI); return x >= 0 ? p : 1 - p; };
+  const price = type === "call" ? S * Nc(d1) - K * Math.exp(-r * T) * Nc(d2) : K * Math.exp(-r * T) * Nc(-d2) - S * Nc(-d1);
+  const h = S * 0.001;
+  const delta = (type === "call" ? Nc(d1) : Nc(d1) - 1);
+  const phi   = Math.exp(-d1*d1/2)/Math.sqrt(2*Math.PI);
+  const gamma = phi / (S * sigma * Math.sqrt(T));
+  const theta = (-S * phi * sigma / (2 * Math.sqrt(T)) - r * K * Math.exp(-r * T) * (type === "call" ? Nc(d2) : Nc(-d2))) / 365;
+  const vega  = S * phi * Math.sqrt(T) / 100;
+  const rho   = (type === "call" ? K * T * Math.exp(-r * T) * Nc(d2) : -K * T * Math.exp(-r * T) * Nc(-d2)) / 100;
+  return { price: +Math.max(0, price).toFixed(4), delta: +delta.toFixed(4), gamma: +gamma.toFixed(6), theta: +theta.toFixed(4), vega: +vega.toFixed(4), rho: +rho.toFixed(4) };
+}
+
+/* ─────────────────────────────────────────
+   SHARED UI COMPONENTS
+───────────────────────────────────────── */
+const fmtPrice = v => v > 9999 ? "$" + Math.round(v).toLocaleString() : v >= 1 ? "$" + v.toFixed(2) : "$" + v;
+
+const Chg = memo(({ v }) => (
+  <span style={{ color: v > 0 ? G : v < 0 ? R : MU, fontFamily: MN, fontWeight: 700, fontSize: 11 }}>
+    {v > 0 ? "+" : ""}{v.toFixed(2)}%
+  </span>
+));
+
+const Lbl = ({ children }) => (
+  <div style={{ fontSize: 9, color: MU, letterSpacing: 2, textTransform: "uppercase", fontFamily: MN, marginBottom: 4 }}>{children}</div>
+);
+
+const Panel = ({ children, style = {} }) => (
+  <div style={{ background: BG1, border: `1px solid ${BD}`, padding: 12, ...style }}>{children}</div>
+);
+
+const Tag = ({ children, col = AM }) => (
+  <span style={{ background: col + "22", color: col, border: `1px solid ${col}44`, padding: "1px 6px", fontSize: 9, fontWeight: 700, fontFamily: MN }}>{children}</span>
+);
+
+const iSt = { background: BG2, border: `1px solid ${BD2}`, color: WH, fontFamily: MN, fontSize: 12, padding: "5px 8px", width: "100%", outline: "none" };
+const sSt = { ...iSt, cursor: "pointer" };
+
+const BtnRow = ({ options, value, onChange, colOn = AM }) => (
+  <div style={{ display: "flex", gap: 4 }}>
+    {options.map(o => (
+      <button key={o} onClick={() => onChange(o)}
+        style={{ flex: 1, padding: "5px 8px", background: value === o ? colOn + "22" : BG2, color: value === o ? colOn : MU, border: `1px solid ${value === o ? colOn : BD}`, fontFamily: MN, fontSize: 10, cursor: "pointer", letterSpacing: 1 }}>
+        {o}
+      </button>
+    ))}
   </div>
 );
-const iSt={background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 13px",color:T.text,fontSize:13,fontFamily:T.sans,width:"100%"};
-const sSt={...iSt,appearance:"none",cursor:"pointer"};
 
-/* ─── AI Model selector ─────────────────────────────────────────── */
-function ModelPicker({value,onChange,label="AI MODEL (FREE)",compact=false}){
-  return(
-    <div>
-      {!compact&&<div style={{fontSize:9,color:T.muted,letterSpacing:2,marginBottom:6}}>{label}</div>}
-      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-        {Object.entries(AI_MODELS).map(([k,m])=>(
-          <button key={k} onClick={()=>onChange(k)} title={m.desc} style={{background:value===k?m.color+"22":"transparent",color:value===k?m.color:T.muted,border:`1px solid ${value===k?m.color+"55":T.border}`,padding:compact?"4px 8px":"5px 11px",borderRadius:6,fontSize:compact?10:11,fontWeight:value===k?700:400,display:"flex",alignItems:"center",gap:4}}>
-            <span>{m.badge}</span>{compact?k.split(" ")[0]:k}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ─── AI response block ─────────────────────────────────────────── */
-function AIBlock({text,loading,model,style={}}){
-  if(!loading&&!text) return null;
-  const m=AI_MODELS[model]||AI_MODELS["GPT-4o"];
-  return(
-    <div style={{background:"#040e14",border:`1px solid ${m.color}30`,borderRadius:12,padding:18,marginTop:14,...style}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-        <div style={{width:8,height:8,borderRadius:"50%",background:m.color,animation:"pulse 2s infinite"}}/>
-        <span style={{fontSize:9,fontWeight:700,color:m.color,letterSpacing:2}}>{m.badge} {model} ANALYSIS</span>
-        <Chip color={m.color} style={{marginLeft:"auto"}}>Free AI</Chip>
-      </div>
-      {loading
-        ?<div style={{display:"flex",alignItems:"center",gap:10,color:T.sub}}><Spinner color={m.color}/><span style={{animation:"blink 1.5s infinite",fontSize:13}}>Analyzing with {model}…</span></div>
-        :<div style={{fontSize:13,color:T.text,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{text}</div>
-      }
-    </div>
-  );
-}
-
-/* ─── Ticker tape ─────────────────────────────────────────── */
-function TickerTape({items}){
-  const d=[...items,...items];
-  return(
-    <div style={{overflow:"hidden",height:26,background:T.bg2,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center"}}>
-      <div style={{display:"flex",animation:"ticker 45s linear infinite",whiteSpace:"nowrap"}}>
-        {d.map((it,i)=>(
-          <span key={i} style={{display:"inline-flex",alignItems:"center",gap:8,padding:"0 24px",fontSize:11,fontFamily:T.mono,borderRight:`1px solid ${T.border}`}}>
-            <span style={{color:T.muted}}>{it.s}</span>
-            <span style={{color:T.text,fontWeight:600}}>{it.p}</span>
-            <span style={{color:it.c>=0?T.green:T.red,fontWeight:600}}>{it.c>=0?"▲":"▼"}{Math.abs(it.c)}%</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Free AI Banner ─────────────────────────────────────────── */
-function FreeBanner(){
-  const [open,setOpen]=useState(true);
-  if(!open) return null;
-  return(
-    <div style={{background:"linear-gradient(135deg,#040e1a,#050d14,#0a0520)",border:`1px solid ${T.teal}25`,borderRadius:12,padding:"12px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-        <span style={{fontSize:18}}>🆓</span>
-        <div>
-          <div style={{fontSize:12,fontWeight:700,color:T.teal,marginBottom:2}}>100% Free AI — Zero API Keys Required</div>
-          <div style={{fontSize:11,color:T.muted}}>All AI features run free via <span style={{color:T.blue,fontWeight:600}}>Pollinations.ai</span> — 5 models available, no sign-up, no cost</div>
+function ChartTip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: BG3, border: `1px solid ${BD2}`, padding: "8px 12px", fontFamily: MN, fontSize: 11 }}>
+      <div style={{ color: AM, marginBottom: 4 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ color: p.color || WH, marginBottom: 2 }}>
+          {p.name}: {typeof p.value === "number" ? (p.value > 999 ? "$" + p.value.toLocaleString() : p.value.toFixed ? "$" + p.value : p.value) : p.value}
         </div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          {Object.entries(AI_MODELS).map(([k,m])=><Chip key={k} color={m.color}>{m.badge} {k}</Chip>)}
-        </div>
-      </div>
-      <button onClick={()=>setOpen(false)} style={{background:"transparent",color:T.muted,fontSize:18,padding:"0 6px"}}>×</button>
+      ))}
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   ROOT APP COMPONENT
-═══════════════════════════════════════════════════════════════════ */
-export default function App(){
-  /* ── Live price ── */
-  const [price,     setPrice]    = useState(67842);
-  const [hist,      setHist]     = useState(()=>genSpark(67500,2800,40));
-  const [lastUpd,   setLastUpd]  = useState(new Date());
+/* ─────────────────────────────────────────
+   CLOCK — isolated so it never causes
+   App or any sibling to re-render
+───────────────────────────────────────── */
+const Clock = memo(function Clock() {
+  const ref = useRef(null);
+  useEffect(() => {
+    const update = () => { if (ref.current) ref.current.textContent = new Date().toLocaleTimeString("en-CA", { hour12: false }) + " ET"; };
+    update();
+    const iv = setInterval(update, 1000);
+    return () => clearInterval(iv);
+  }, []);
+  return <span ref={ref} style={{ color: MU, borderLeft: `1px solid ${BD}`, paddingLeft: 10, fontFamily: MN, fontSize: 9 }} />;
+});
 
-  /* ── Navigation ── */
-  const [tab, setTab] = useState("overview");
+/* ─────────────────────────────────────────
+   TAB: TERMINAL
+───────────────────────────────────────── */
+const TabTerminal = memo(function TabTerminal({ asset }) {
+  const [showBB, setShowBB] = useState(true);
+  const [showMA, setShowMA] = useState(true);
 
-  /* ── Markets ── */
-  const [search,   setSearch]  = useState("");
-  const [sortKey,  setSortKey] = useState("r");
-  const [sortDir,  setSortDir] = useState(1);
+  // Seeded history — stable, never re-generates on re-render
+  const history = useMemo(() => genHistory(asset.p, asset.s), [asset.s]);
+  const closes  = useMemo(() => history.map(d => d.c), [history]);
 
-  /* ── Sentiment feed ── */
-  const [feed,      setFeed]      = useState(INIT_FEED);
-  const [postTxt,   setPostTxt]   = useState("");
-  const [postAsset, setPostAsset] = useState("BTC");
-
-  /* ── Forecast ── */
-  const [fAsset,   setFAsset]   = useState("BTC");
-  const [fFrame,   setFFrame]   = useState("1H");
-  const [fHorizon, setFHorizon] = useState("3M");
-  const [fData,    setFData]    = useState(null);
-  const [fModel,   setFModel]   = useState("Gemini Flash");
-  const [fText,    setFText]    = useState("");
-  const [fLoading, setFLoading] = useState(false);
-
-  /* ── Portfolio builder ── */
-  const [pbStep,    setPbStep]    = useState(1);
-  const [pbModel,   setPbModel]   = useState("GPT-4o");
-  const [pbResult,  setPbResult]  = useState(null);
-  const [pbLoading, setPbLoading] = useState(false);
-  const [pbForm,    setPbForm]    = useState({
-    age:"30",province:"ON",income:"80000",savingsTotal:"25000",
-    monthlySavings:"1000",riskScore:"5",jobType:"employed",
-    existingRRSP:"0",existingTFSA:"0",existingInvestments:"",
-    goals:"retirement,emergencyFund",horizon:"10",debt:"10000",marital:"single",
-  });
-
-  /* ── Compare models ── */
-  const [cmpTopic,   setCmpTopic]   = useState("");
-  const [cmpResults, setCmpResults] = useState({});
-  const [cmpLoading, setCmpLoading] = useState({});
-
-  /* ── AI Chat ── */
-  const [msgs,      setMsgs]      = useState([{role:"assistant",model:"GPT-4o",content:"Hello! I'm your multi-model AI Financial Analyst.\n\n🆓 All AI runs completely free — no API keys needed.\n\nI have real-time context on:\n• Live BTC price and top crypto markets\n• NFT collection floor prices and sentiment\n• Mutual fund performance and YTD returns\n• AI-screened upcoming best & worst performers\n• Canadian TFSA / RRSP tax optimization\n\nChoose any AI model and ask me anything!"}]);
-  const [aiInput,   setAiInput]   = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiModel,   setAiModel]   = useState("GPT-4o-mini");
-  const aiEnd = useRef(null);
-  const countdownVal = useRef(90);
-  const cdRef2 = useRef(null);
-
-  const priceUp  = hist.length>1 && hist[hist.length-1].v >= hist[hist.length-2].v;
-  const priceCol = priceUp ? T.green : T.red;
-
-  /* ── 90-second refresh ── */
-  const cdRef = useRef(null);
-  useEffect(()=>{
-    const updateCD = ()=>{
-      const v = countdownVal.current + "s";
-      if(cdRef.current) cdRef.current.textContent = v;
-      if(cdRef2.current) cdRef2.current.textContent = v;
+  const ind = useMemo(() => {
+    const rsi  = calcRSI(closes);
+    const { macd, sig, hist } = calcMACD(closes);
+    const bb   = calcBB(closes);
+    const sma20 = calcSMA(closes, 20);
+    const sma50 = calcSMA(closes, 50);
+    const rets  = history.map(d => d.ret);
+    const nonzero = rets.filter(Boolean);
+    const mu    = nonzero.reduce((a, b) => a + b, 0) / nonzero.length;
+    const sigma = Math.sqrt(nonzero.reduce((a, b) => a + b ** 2, 0) / nonzero.length);
+    return {
+      rsi, macd, sig, hist, bb, sma20, sma50,
+      sharpe: calcSharpe(nonzero),
+      var95:  calcVaR(nonzero),
+      sigma:  +(sigma * Math.sqrt(252) * 100).toFixed(1),
+      mu:     +(mu * 252 * 100).toFixed(1),
     };
-    const iv=setInterval(()=>{
-      setPrice(p=>{
-        const next=+(p+(Math.random()-.49)*280).toFixed(2);
-        setHist(h=>[...h.slice(-39),{t:Date.now(),v:next}]);
-        setLastUpd(new Date());
-        countdownVal.current = 90;
-        return next;
-      });
-    },90000);
-    const cd=setInterval(()=>{
-      countdownVal.current = Math.max(0, countdownVal.current - 1);
-      updateCD();
-    },1000);
-    return()=>{clearInterval(iv);clearInterval(cd);};
-  },[]);
+  }, [history]);
 
-  // scroll handled manually in sendMsg
+  const chartData = useMemo(() => history.map((d, i) => ({
+    ...d,
+    rsi:    ind.rsi[i] ?? null,
+    macd:   ind.macd[i] ?? null,
+    sig:    ind.sig[i] ?? null,
+    mhist:  ind.hist[i] ?? null,
+    bbUp:   ind.bb[i]?.up ?? null,
+    bbLo:   ind.bb[i]?.lo ?? null,
+    sma20:  ind.sma20[i] ?? null,
+    sma50:  ind.sma50[i] ?? null,
+  })), [history, ind]);
 
-  /* ── Build forecast data ── */
-  const buildForecast=useCallback(()=>{
-    const coin=CRYPTOS.find(c=>c.s===fAsset)||CRYPTOS[0];
-    const b=coin.p;
-    const FRAMES={
-      "1M": {pts:60,vol:b*.003,lbl:i=>{const t=new Date();t.setMinutes(t.getMinutes()+i);return t.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}},
-      "5M": {pts:48,vol:b*.006,lbl:i=>{const t=new Date();t.setMinutes(t.getMinutes()+i*5);return t.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}},
-      "15M":{pts:48,vol:b*.012,lbl:i=>{const t=new Date();t.setMinutes(t.getMinutes()+i*15);return t.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}},
-      "1H": {pts:48,vol:b*.022,lbl:i=>{const t=new Date();t.setHours(t.getHours()+i);return`${t.getMonth()+1}/${t.getDate()} ${t.getHours()}h`;}},
-      "4H": {pts:42,vol:b*.040,lbl:i=>{const t=new Date();t.setHours(t.getHours()+i*4);return`${t.getMonth()+1}/${t.getDate()} ${t.getHours()}h`;}},
-      "1D": {pts:30,vol:b*.065,lbl:i=>{const t=new Date();t.setDate(t.getDate()+i);return t.toLocaleDateString([],{month:"short",day:"numeric"});}},
-      "1W": {pts:24,vol:b*.11, lbl:i=>{const t=new Date();t.setDate(t.getDate()+i*7);return t.toLocaleDateString([],{month:"short",day:"numeric"});}},
-    };
-    const HORIZONS={
-      "3M": {mo:3, bull:.45,base:.18,bear:-.25},
-      "6M": {mo:6, bull:.80,base:.30,bear:-.40},
-      "12M":{mo:12,bull:1.40,base:.55,bear:-.60},
-    };
-    const fr=FRAMES[fFrame],hz=HORIZONS[fHorizon];
-    const rsi=+(42+Math.random()*35).toFixed(1);
-    const macd=+((Math.random()-.42)*b*.003).toFixed(1);
-    setFData({
-      intraday:genIntraday(b,fr.vol,fr.pts,fr.lbl),
-      forecast:genForecast(b,hz.mo,hz.bull,hz.base,hz.bear),
-      rsi,macd,
-      bbUpp:+(b*1.09).toFixed(0),bbLow:+(b*.91).toFixed(0),
-      ma20:+(b*(.95+Math.random()*.06)).toFixed(0),
-      ma50:+(b*(.88+Math.random()*.10)).toFixed(0),
-      coin,base:b,
-    });
-  },[fAsset,fFrame,fHorizon]);
+  const last = chartData[chartData.length - 1] || {};
+  const rsiNow  = last.rsi  || 50;
+  const macdNow = last.macd || 0;
+  const sigNow  = last.sig  || 0;
+  const cNow    = last.c    || asset.p;
+  const m20     = last.sma20 || cNow;
+  const m50     = last.sma50 || cNow;
 
-  useEffect(()=>{buildForecast();setFText("");},[buildForecast]);
+  const signals = [
+    { n: "RSI(14)", v: rsiNow > 70 ? "OVERBOUGHT" : rsiNow < 30 ? "OVERSOLD" : "NEUTRAL", col: rsiNow > 70 ? R : rsiNow < 30 ? G : MU },
+    { n: "MACD",    v: macdNow > sigNow ? "BULLISH" : "BEARISH",                           col: macdNow > sigNow ? G : R },
+    { n: "vs MA20", v: cNow > m20 ? "ABOVE" : "BELOW",                                     col: cNow > m20 ? G : R },
+    { n: "vs MA50", v: cNow > m50 ? "ABOVE" : "BELOW",                                     col: cNow > m50 ? G : R },
+    { n: "24H",     v: asset.c >= 0 ? "UPTREND" : "DOWNTREND",                             col: asset.c >= 0 ? G : R },
+  ];
+  const bulls = signals.filter(s => s.col === G).length;
+  const sigCol = bulls >= 4 ? G : bulls <= 2 ? R : AM;
+  const sigLbl = bulls >= 4 ? "STRONG BUY" : bulls === 3 ? "BUY" : bulls === 2 ? "HOLD" : "SELL";
 
-  /* ── Forecast AI call ── */
-  async function fetchForecastAI(){
-    if(!fData)return;
-    setFLoading(true);setFText("");
-    try{
-      const last=fData.forecast[fData.forecast.length-1];
-      const t=await callAI(
-        [{role:"user",content:`Analyze ${fData.coin.s} (${fData.coin.name}) for the ${fHorizon} outlook.
-Current price: $${fData.base.toLocaleString()} | Chart: ${fFrame} timeframe
-RSI(14): ${fData.rsi} | MACD: ${fData.macd>0?"+":""}${fData.macd}
-BB Upper: $${fData.bbUpp.toLocaleString()} | BB Lower: $${fData.bbLow.toLocaleString()}
-MA20: $${fData.ma20.toLocaleString()} | MA50: $${fData.ma50.toLocaleString()}
-24h change: ${fData.coin.c}% | Community sentiment: ${fData.coin.sent}/100
-Bull target: $${last?.bull?.toLocaleString()} | Base: $${last?.base?.toLocaleString()} | Bear: $${last?.bear?.toLocaleString()}
-
-Provide a structured analysis: 1) Technical reading 2) Key support/resistance levels 3) Price conviction and target 4) Top risks. Max 200 words. Use bullet points.`}],
-        "You are a concise quantitative financial analyst. Give specific price targets and levels. Be direct and data-driven.",
-        fModel
-      );
-      setFText(t);
-    }catch(e){setFText(`⚠️ ${e.message}. Pollinations.ai may be busy — try again in a moment.`);}
-    setFLoading(false);
-  }
-
-  /* ── NLP sentiment scoring ── */
-  function submitPost(){
-    if(!postTxt.trim())return;
-    const lc=postTxt.toLowerCase();
-    const bw=["bull","moon","up","buy","long","green","pump","ath","strong","breakout","surge","🚀","📈","hold","gem","alpha","accumulate","undervalued","cheap"];
-    const rw=["bear","down","sell","short","crash","bad","red","dump","📉","exit","dead","weak","rekt","scam","rug","correction","overvalued","avoid","fud","bubble","dump"];
-    const bs=bw.filter(w=>lc.includes(w)).length,rs=rw.filter(w=>lc.includes(w)).length;
-    let sc=bs>rs?Math.min(97,62+bs*8+Math.floor(Math.random()*12)):rs>bs?Math.max(3,37-rs*8-Math.floor(Math.random()*10)):44+Math.floor(Math.random()*16);
-    setFeed(f=>[{u:"you",txt:postTxt,bull:sc>=60?true:sc<=40?false:null,asset:postAsset,sc,ago:"just now"},...f]);
-    setPostTxt("");
-  }
-
-  /* ── Portfolio builder AI ── */
-  async function buildPortfolio(){
-    setPbLoading(true);setPbResult(null);
-    const f=pbForm;
-    const TFSA_ANNUAL={2009:5000,2010:5000,2011:5000,2012:5000,2013:5500,2014:5500,2015:10000,2016:5500,2017:5500,2018:5500,2019:6000,2020:6000,2021:6000,2022:6000,2023:6500,2024:7000,2025:7000};
-    const startY=Math.max(2009,2026-parseInt(f.age)+18);
-    const tfsaRoom=Object.entries(TFSA_ANNUAL).filter(([y])=>parseInt(y)>=startY&&parseInt(y)<=2025).reduce((s,[,v])=>s+v,0)-parseInt(f.existingTFSA||"0");
-    const rrspRoom=Math.max(0,Math.min(31560,Math.round(parseInt(f.income||"0")*.18))-parseInt(f.existingRRSP||"0"));
-    try{
-      const raw=await callAI(
-        [{role:"user",content:`Build a complete personalized Canadian portfolio plan. Return ONLY valid JSON — no markdown, no code fences, no extra text before or after.
-
-CLIENT:
-Age: ${f.age} | Province: ${f.province} | Status: ${f.marital} | Job: ${f.jobType}
-Income: $${parseInt(f.income).toLocaleString()} CAD/yr
-Total savings: $${parseInt(f.savingsTotal).toLocaleString()} CAD
-Monthly capacity: $${parseInt(f.monthlySavings).toLocaleString()} CAD/mo
-Debt: $${parseInt(f.debt||"0").toLocaleString()} CAD
-Risk appetite: ${f.riskScore}/10 | Horizon: ${f.horizon} yrs
-Goals: ${f.goals.replace(/,/g,", ")}
-Existing: ${f.existingInvestments||"None"}
-TFSA room: $${tfsaRoom.toLocaleString()} | RRSP room: $${rrspRoom.toLocaleString()}
-
-Return this exact JSON (fill all numbers accurately):
-{"summary":"2-3 sentence personalized summary","riskProfile":"Conservative or Balanced or Growth or Aggressive","tfsaRoom":${tfsaRoom},"rrspRoom":${rrspRoom},"tfsaStrategy":"specific TFSA recommendation","rrspStrategy":"specific RRSP recommendation","monthlyPlan":{"tfsa":number,"rrsp":number,"emergency":number,"investments":number,"debtPaydown":number},"allocation":[{"label":"string","pct":number,"amount":number,"color":"#hex like #4ade80","rationale":"why"}],"holdings":[{"ticker":"string","name":"string","type":"ETF or Stock or Crypto or Bond or GIC","weight":number,"reason":"brief","account":"TFSA or RRSP or Taxable"}],"projections":{"yr5":number,"yr10":number,"yr20":number,"retirement":number},"keyActions":["action 1","action 2","action 3","action 4","action 5"],"taxTips":["tip 1","tip 2","tip 3"],"warnings":["risk 1 if any"]}`}],
-        "You are a certified Canadian financial planner (CFP). Return only valid JSON. No markdown. Numbers must be realistic based on inputs.",
-        pbModel
-      );
-      // Parse — strip anything before { and after }
-      const s=raw.indexOf("{"),e=raw.lastIndexOf("}");
-      const parsed=JSON.parse(s>=0&&e>=0?raw.slice(s,e+1):"{}");
-      parsed.tfsaRoom=tfsaRoom;parsed.rrspRoom=rrspRoom;
-      setPbResult(parsed);
-    }catch{
-      // Fallback if JSON parse fails
-      const risk=parseInt(f.riskScore);
-      setPbResult({
-        summary:`Based on your profile — age ${f.age} in ${f.province}, $${parseInt(f.income).toLocaleString()} income, ${f.riskScore}/10 risk — here is your personalized Canadian investment plan optimized for TFSA and RRSP.`,
-        riskProfile:risk<=3?"Conservative":risk<=5?"Balanced":risk<=7?"Growth":"Aggressive",
-        tfsaRoom,rrspRoom,
-        tfsaStrategy:`Contribute $7,000 this year to your TFSA. Hold growth ETFs (XEQT or VEQT) — all gains and withdrawals are permanently tax-free. You have $${tfsaRoom.toLocaleString()} total room.`,
-        rrspStrategy:`Maximize RRSP contributions to unlock tax deduction. Hold US ETFs (VFV.TO) in RRSP to eliminate 15% US withholding tax on dividends. Your room: $${rrspRoom.toLocaleString()}.`,
-        monthlyPlan:{tfsa:Math.round(parseInt(f.monthlySavings)*.32),rrsp:Math.round(parseInt(f.monthlySavings)*.22),emergency:Math.round(parseInt(f.monthlySavings)*.15),investments:Math.round(parseInt(f.monthlySavings)*.18),debtPaydown:Math.round(parseInt(f.monthlySavings)*.13)},
-        allocation:[
-          {label:"Canadian ETFs",pct:30,amount:Math.round(parseInt(f.savingsTotal)*.30),color:"#60a5fa",rationale:"Core diversified Canadian equity via index ETF"},
-          {label:"US ETFs",      pct:28,amount:Math.round(parseInt(f.savingsTotal)*.28),color:"#4ade80",rationale:"S&P 500 and Nasdaq growth exposure"},
-          {label:"Intl ETFs",    pct:14,amount:Math.round(parseInt(f.savingsTotal)*.14),color:"#a78bfa",rationale:"Global diversification ex-North America"},
-          {label:"Bonds / GICs", pct:15,amount:Math.round(parseInt(f.savingsTotal)*.15),color:"#fbbf24",rationale:"Stability and fixed income allocation"},
-          {label:"Crypto",       pct:8, amount:Math.round(parseInt(f.savingsTotal)*.08), color:"#fb923c",rationale:"High-risk growth — BTC & ETH only"},
-          {label:"Emergency",    pct:5, amount:Math.round(parseInt(f.savingsTotal)*.05), color:"#2dd4bf",rationale:"3-6 months expenses in HISA"},
-        ],
-        holdings:[
-          {ticker:"XEQT.TO",name:"iShares Core Equity ETF",      type:"ETF",   weight:22,reason:"All-in-one global equity",        account:"TFSA"},
-          {ticker:"VFV.TO",  name:"Vanguard S&P 500 Index ETF",  type:"ETF",   weight:18,reason:"US large-cap, RRSP for tax savings",account:"RRSP"},
-          {ticker:"ZAG.TO",  name:"BMO Aggregate Bond ETF",       type:"Bond",  weight:15,reason:"Fixed income stability",           account:"RRSP"},
-          {ticker:"XIC.TO",  name:"iShares S&P/TSX Capped ETF",  type:"ETF",   weight:13,reason:"Canadian market exposure",         account:"TFSA"},
-          {ticker:"BTC",     name:"Bitcoin",                      type:"Crypto",weight:7, reason:"Long-term digital asset store",    account:"Taxable"},
-          {ticker:"ETH",     name:"Ethereum",                     type:"Crypto",weight:3, reason:"Smart contract platform exposure", account:"Taxable"},
-        ],
-        projections:{
-          yr5:  Math.round(parseInt(f.savingsTotal)*1.38+parseInt(f.monthlySavings)*60*1.15),
-          yr10: Math.round(parseInt(f.savingsTotal)*1.95+parseInt(f.monthlySavings)*120*1.28),
-          yr20: Math.round(parseInt(f.savingsTotal)*3.80+parseInt(f.monthlySavings)*240*1.45),
-          retirement:Math.round(parseInt(f.savingsTotal)*5.50+parseInt(f.monthlySavings)*parseInt(f.horizon)*12*1.55),
-        },
-        keyActions:[
-          `Maximize TFSA: $7,000/yr — you have $${tfsaRoom.toLocaleString()} total room`,
-          `Contribute to RRSP: reduces taxable income by $${Math.min(rrspRoom,parseInt(f.monthlySavings)*4).toLocaleString()}/yr`,
-          `Pay down debt: eliminates $${Math.round(parseInt(f.debt||"0")*.18).toLocaleString()}/yr in interest costs`,
-          "Set up automatic monthly contributions to remove emotion from investing",
-          "Rebalance quarterly back to target allocation percentages",
-        ],
-        taxTips:[
-          "Hold US ETFs in RRSP to eliminate 15% withholding tax on US dividends",
-          "Keep highest-growth assets in TFSA — capital gains are completely tax-free",
-          "Canadian-eligible dividends in taxable account get dividend tax credit",
-        ],
-        warnings:parseInt(f.riskScore)>=8?["High risk score — ensure you can hold through 40-60% drawdowns without panic selling"]:["Diversification reduces risk but cannot eliminate it entirely"],
-      });
-    }
-    setPbLoading(false);setPbStep(3);
-  }
-
-  /* ── Model comparison ── */
-  async function runComparison(){
-    if(!cmpTopic.trim())return;
-    const models=["GPT-4o","Gemini Flash","Mistral","Llama 3.3"];
-    setCmpResults({});
-    const newLoading={};models.forEach(m=>newLoading[m]=true);
-    setCmpLoading(newLoading);
-    models.forEach(async modelKey=>{
-      try{
-        const t=await callAI(
-          [{role:"user",content:`${cmpTopic}\n\nKeep your response under 120 words. Be specific and direct.`}],
-          "You are a financial analyst. Give a direct, data-driven answer. No disclaimers. Under 120 words.",
-          modelKey
-        );
-        setCmpResults(r=>({...r,[modelKey]:t}));
-      }catch(e){
-        setCmpResults(r=>({...r,[modelKey]:`Error: ${e.message}`}));
-      }
-      setCmpLoading(l=>({...l,[modelKey]:false}));
-    });
-  }
-
-  /* ── AI Chat ── */
-  async function sendMsg(){
-    if(!aiInput.trim()||aiLoading)return;
-    const msg=aiInput.trim();setAiInput("");setShouldScroll(true);
-    setMsgs(m=>[...m,{role:"user",content:msg,model:aiModel}]);
-    setAiLoading(true);
-    try{
-      const sys=`You are an expert financial analyst with live market data.
-BTC: $${price.toLocaleString()} (live, refreshes every 90s).
-Top 24h gainers: AVAX+7.83%, SOL+5.21%, RNDR+6.11%, LINK+4.67%.
-Worst 24h: DOGE-3.78%, FIL-4.33%, DOT-2.14%, LUNC-6.4%.
-Fear & Greed index: 68 (Greed). Overall market cap: $2.41T.
-Top NFT floor: CryptoPunks 48.2 ETH, BAYC 12.4 ETH, Azuki 6.8 ETH (+15.3%).
-Best upcoming picks: SUI +180% target (bull 89/100), INJ +120%, RNDR +95%.
-Highest risk coins: LUNC (-85% risk), SHIB (-70%), FIL (-55%).
-Top fund YTD: FDGRX +24.1%, ONEQ +21.8%, VFINX +18.4%.
-TFSA 2025 limit: $7,000/yr. RRSP 2025 max: $32,490. 
-Be specific and direct. No excessive disclaimers. Give actual recommendations.`;
-      const t=await callAI([...msgs.slice(-12).map(m=>({role:m.role,content:m.content})),{role:"user",content:msg}],sys,aiModel);
-      setMsgs(m=>[...m,{role:"assistant",content:t,model:aiModel}]);
-    }catch(e){
-      setMsgs(m=>[...m,{role:"assistant",content:`⚠️ ${e.message}\n\nPollinations.ai may be temporarily busy. Please try again in a moment — it's free and needs no API key.`,model:aiModel}]);
-    }
-    setAiLoading(false);
-  }
-
-  /* ══════════════════════════════════════════════════════════
-     TAB: OVERVIEW
-  ══════════════════════════════════════════════════════════ */
-  function OverviewTab(){
-    const top=[...CRYPTOS].sort((a,b)=>b.c-a.c).slice(0,5);
-    const bot=[...CRYPTOS].sort((a,b)=>a.c-b.c).slice(0,5);
-    const mktData=[
-      {name:"Crypto",val:2410,prev:2290},{name:"NFT",val:380,prev:420},
-      {name:"DeFi",val:180,prev:165},{name:"Funds",val:14200,prev:13800},
-    ];
-    return(
-      <div className="fade-up">
-        <FreeBanner/>
-        {/* Hero stats */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:16}}>
-          {[
-            {l:"Market Cap",    v:"$2.41T",              sub:"+1.8% 24h",  c:T.blue},
-            {l:"BTC Price",     v:`$${price.toLocaleString()}`,sub:priceUp?"▲ Rising":"▼ Falling",c:priceCol},
-            {l:"24h Volume",    v:"$98.4B",              sub:"+12.3% avg", c:T.green},
-            {l:"BTC Dominance", v:"54.7%",               sub:"−0.4% 24h",  c:T.yellow},
-            {l:"Fear & Greed",  v:"68",                  sub:"Greed Zone", c:T.orange},
-          ].map((s,i)=>(
-            <div key={i} style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px"}}>
-              <div style={{fontSize:9,color:T.muted,letterSpacing:2.5,marginBottom:8}}>{s.l.toUpperCase()}</div>
-              <div style={{fontSize:22,fontWeight:800,color:s.c,fontFamily:T.mono,letterSpacing:-.5}}>{s.v}</div>
-              <div style={{fontSize:11,color:T.muted,marginTop:5}}>{s.sub}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr",gap:16}}>
-          {/* Live BTC chart */}
-          <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div>
-                <Sec dot={priceCol} style={{marginBottom:8}}>BTC / USD — Live Price</Sec>
-                <div style={{fontSize:44,fontWeight:900,color:priceCol,fontFamily:T.mono,letterSpacing:-2,lineHeight:1}}>${price.toLocaleString()}</div>
-                <div style={{display:"flex",alignItems:"center",gap:16,marginTop:10}}>
-                  <span style={{fontSize:12,color:priceCol,fontWeight:700}}>{priceUp?"▲ +0.21%":"▼ −0.14%"}</span>
-                  <span style={{fontSize:11,color:T.muted}}>Refreshes in <span style={{color:T.blue,fontFamily:T.mono,fontWeight:700}}><span ref={cdRef}>90s</span></span></span>
-                  <span style={{fontSize:10,color:T.muted}}>Last: {lastUpd.toLocaleTimeString()}</span>
-                </div>
+  return (
+    <div style={{ display: "flex", height: "calc(100vh - 88px)", overflow: "hidden", gap: 1 }}>
+      {/* Chart column */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", padding: 8, gap: 6, minWidth: 0 }}>
+        {/* Header */}
+        <Panel style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <span style={{ fontSize: 18, fontWeight: 800, fontFamily: MN, color: AM }}>{asset.s}</span>
+            <span style={{ fontSize: 11, color: MU, marginLeft: 8 }}>{asset.name}</span>
+          </div>
+          <span style={{ fontSize: 22, fontWeight: 800, fontFamily: MN, color: asset.c >= 0 ? G : R }}>{fmtPrice(asset.p)}</span>
+          <Chg v={asset.c} />
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            {[["MC", asset.mc + "B"], ["VOL", asset.vol + "B"], ["BETA", asset.beta], ["P/E", asset.pe || "—"], ["DIV", asset.div ? asset.div + "%" : "—"]].map(([l, v]) => (
+              <div key={l} style={{ borderLeft: `1px solid ${BD}`, paddingLeft: 10 }}>
+                <Lbl>{l}</Lbl>
+                <div style={{ fontFamily: MN, color: WH, fontSize: 11, fontWeight: 600 }}>{v}</div>
               </div>
-              <div style={{background:priceCol+"12",border:`1px solid ${priceCol}30`,borderRadius:9,padding:"7px 12px",display:"flex",alignItems:"center",gap:7}}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:priceCol,animation:"pulse 1.5s infinite"}}/>
-                <span style={{fontSize:9,color:priceCol,letterSpacing:1.5,fontWeight:700}}>LIVE</span>
-              </div>
-            </div>
-            <MiniSpark data={hist} color={priceCol} h={120}/>
-          </div>
-          {/* Sentiment gauge */}
-          <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
-            <SentGauge score={68} size={240}
-              title="Overall Market Sentiment"
-              sub="Indicates whether most users posting on symbol streams over the last 24 hours are bullish or bearish."
-            />
-          </div>
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          {[{title:"🚀 Top 24h Performers",coins:top,dot:T.green},{title:"📉 Worst 24h Performers",coins:bot,dot:T.red}].map((sec,si)=>(
-            <div key={si} style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={sec.dot}>{sec.title}</Sec>
-              {sec.coins.map((c,i)=>(
-                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:i<4?`1px solid ${T.dim}`:"none"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:32,height:32,borderRadius:8,background:`hsl(${c.r*37},55%,25%)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:T.text,flexShrink:0}}>{c.s.slice(0,2)}</div>
-                    <div><div style={{fontWeight:700,color:T.text,fontSize:13}}>{c.s}</div><div style={{fontSize:11,color:T.muted}}>{c.name}</div></div>
-                  </div>
-                  <div style={{textAlign:"right"}}><div style={{fontFamily:T.mono,fontSize:12,color:T.text}}>${c.p.toLocaleString()}</div><Pct v={c.c}/></div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-
-        {/* Market overview bar chart */}
-        <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-          <Sec dot={T.blue}>Asset Class Overview — Total Value (Billions USD)</Sec>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={mktData} barGap={8}>
-              <XAxis dataKey="name" tick={{fill:T.muted,fontSize:12}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fill:T.muted,fontSize:11}} axisLine={false} tickLine={false} tickFormatter={v=>`$${v}B`}/>
-              <Tooltip content={<CTip prefix="$" dec={0}/>}/>
-              <Bar dataKey="prev" name="Last Period" radius={[4,4,0,0]} fill={T.border3} opacity={.6}/>
-              <Bar dataKey="val"  name="Current"     radius={[4,4,0,0]} fill={T.blue}   opacity={.85}/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    );
-  }
-
-  /* ══════════════════════════════════════════════════════════
-     TAB: MARKETS
-  ══════════════════════════════════════════════════════════ */
-  function MarketsTab(){
-    const toggle=k=>{if(sortKey===k)setSortDir(d=>-d);else{setSortKey(k);setSortDir(1);}};
-    const list=useMemo(()=>CRYPTOS.filter(c=>c.name.toLowerCase().includes(search.toLowerCase())||c.s.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>typeof a[sortKey]==="number"?(a[sortKey]-b[sortKey])*sortDir:(a[sortKey]||"").localeCompare(b[sortKey]||"")*sortDir),[search,sortKey,sortDir]);
-    const cols=[{k:"r",l:"#"},{k:"name",l:"Asset"},{k:"p",l:"Price"},{k:"c",l:"24h %"},{k:"mc",l:"Mkt Cap"},{k:"v",l:"Volume"},{k:"sent",l:"Sentiment"}];
-    return(
-      <div className="fade-up">
-        <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-            <Sec dot={T.blue} style={{marginBottom:0}}>Crypto Markets — Top 100</Sec>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name or symbol…"
-              style={{...iSt,width:210,padding:"8px 13px"}}/>
-          </div>
-          {/* Header */}
-          <div style={{display:"grid",gridTemplateColumns:"40px 1.5fr 130px 100px 100px 100px 1fr",gap:12,padding:"8px 0",borderBottom:`1px solid ${T.border2}`,fontSize:10,letterSpacing:1.5,color:T.muted,textTransform:"uppercase"}}>
-            {cols.map(col=>(
-              <span key={col.k} onClick={()=>toggle(col.k)} style={{cursor:"pointer",userSelect:"none",display:"flex",alignItems:"center",gap:4}}>
-                {col.l}{sortKey===col.k&&<span style={{color:T.blue}}>{sortDir>0?"↑":"↓"}</span>}
-              </span>
             ))}
           </div>
-          {list.map(c=>(
-            <div key={c.s} style={{display:"grid",gridTemplateColumns:"40px 1.5fr 130px 100px 100px 100px 1fr",gap:12,padding:"11px 0",borderBottom:`1px solid #0a0b14`,alignItems:"center",fontSize:13,transition:"background .15s",cursor:"pointer"}}
-              onMouseEnter={e=>e.currentTarget.style.background="#0e1020"}
-              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <span style={{color:T.muted,fontSize:11,fontFamily:T.mono}}>{c.r}</span>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:34,height:34,borderRadius:9,background:`hsl(${c.r*37},60%,25%)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:T.text,flexShrink:0}}>{c.s.slice(0,2)}</div>
-                <div><div style={{fontWeight:700,color:T.text}}>{c.s}</div><div style={{fontSize:11,color:T.muted}}>{c.name}</div></div>
-              </div>
-              <span style={{fontFamily:T.mono,fontWeight:600,color:T.text}}>${c.p.toLocaleString()}</span>
-              <Pct v={c.c}/>
-              <span style={{color:T.sub,fontSize:12}}>{c.mc}</span>
-              <span style={{color:T.sub,fontSize:12}}>{c.v}</span>
-              <SentBar sc={c.sent}/>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  /* ══════════════════════════════════════════════════════════
-     TAB: FORECAST
-  ══════════════════════════════════════════════════════════ */
-  function ForecastTab(){
-    const FRAMES=["1M","5M","15M","1H","4H","1D","1W"];
-    const HORIZONS=[{k:"3M",l:"3 Month"},{k:"6M",l:"6 Month"},{k:"12M",l:"12 Month"}];
-    const ASSETS=CRYPTOS.slice(0,10).map(c=>c.s);
-    if(!fData)return<div style={{color:T.muted,padding:40,textAlign:"center"}}>Loading…</div>;
-    const last=fData.forecast[fData.forecast.length-1];
-    const bullChg=last?+((last.bull-fData.base)/fData.base*100).toFixed(1):0;
-    const baseChg=last?+((last.base-fData.base)/fData.base*100).toFixed(1):0;
-    const bearChg=last?+((last.bear-fData.base)/fData.base*100).toFixed(1):0;
-    const rsiCol=fData.rsi>70?T.red:fData.rsi<30?T.green:T.yellow;
-    return(
-      <div className="fade-up">
-        {/* Controls */}
-        <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 20px",marginBottom:16}}>
-          <div style={{display:"flex",gap:14,alignItems:"flex-start",flexWrap:"wrap"}}>
-            <div>
-              <div style={{fontSize:9,color:T.muted,letterSpacing:2,marginBottom:6}}>ASSET</div>
-              <select value={fAsset} onChange={e=>{setFAsset(e.target.value);setFText("");}} style={{...sSt,width:105}}>{ASSETS.map(a=><option key={a} value={a}>{a}</option>)}</select>
-            </div>
-            <div>
-              <div style={{fontSize:9,color:T.muted,letterSpacing:2,marginBottom:6}}>CHART TIMEFRAME</div>
-              <div style={{display:"flex",gap:4}}>
-                {FRAMES.map(tf=><button key={tf} onClick={()=>setFFrame(tf)} style={{background:fFrame===tf?T.blue+"22":"transparent",color:fFrame===tf?T.blue:T.muted,border:`1px solid ${fFrame===tf?T.blue+"44":T.border}`,padding:"6px 11px",borderRadius:6,fontSize:11,fontWeight:fFrame===tf?700:400}}>{tf}</button>)}
-              </div>
-            </div>
-            <div>
-              <div style={{fontSize:9,color:T.muted,letterSpacing:2,marginBottom:6}}>FORECAST HORIZON</div>
-              <div style={{display:"flex",gap:4}}>
-                {HORIZONS.map(hz=><button key={hz.k} onClick={()=>setFHorizon(hz.k)} style={{background:fHorizon===hz.k?T.purple+"22":"transparent",color:fHorizon===hz.k?T.purple:T.muted,border:`1px solid ${fHorizon===hz.k?T.purple+"44":T.border}`,padding:"6px 14px",borderRadius:6,fontSize:11,fontWeight:fHorizon===hz.k?700:400}}>{hz.l}</button>)}
-              </div>
-            </div>
-            <div style={{marginLeft:"auto",display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
-              <ModelPicker value={fModel} onChange={m=>{setFModel(m);setFText("");}} compact={true}/>
-              <button onClick={fetchForecastAI} disabled={fLoading} style={{background:T.teal+"22",color:T.teal,border:`1px solid ${T.teal}44`,padding:"8px 20px",borderRadius:8,fontWeight:700,fontSize:12,display:"flex",alignItems:"center",gap:8}}>
-                {fLoading?<><Spinner color={T.teal} size={14}/>Analyzing…</>:<>⚡ Free AI Analysis</>}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+            {[["BB", showBB, setShowBB, CY], ["MA", showMA, setShowMA, AM]].map(([l, on, set, col]) => (
+              <button key={l} onClick={() => set(!on)}
+                style={{ padding: "3px 10px", background: on ? col + "22" : BG2, color: on ? col : MU, border: `1px solid ${on ? col : BD}`, fontFamily: MN, fontSize: 9, cursor: "pointer", letterSpacing: 1 }}>
+                {l}
               </button>
-            </div>
+            ))}
           </div>
-        </div>
+        </Panel>
 
-        {/* Technical indicators */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10,marginBottom:16}}>
-          {[{l:"Price",v:`$${fData.base.toLocaleString()}`,c:T.text},{l:"RSI(14)",v:fData.rsi,c:rsiCol},{l:"MACD",v:fData.macd>0?`+${fData.macd}`:fData.macd,c:fData.macd>0?T.green:T.red},{l:"BB Upper",v:`$${fData.bbUpp.toLocaleString()}`,c:T.red},{l:"MA 20",v:`$${fData.ma20.toLocaleString()}`,c:T.blue},{l:"MA 50",v:`$${fData.ma50.toLocaleString()}`,c:T.purple}].map((s,i)=>(
-            <div key={i} style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px",textAlign:"center"}}>
-              <div style={{fontSize:9,color:T.muted,letterSpacing:2,marginBottom:6}}>{s.l}</div>
-              <div style={{fontSize:17,fontWeight:700,color:s.c,fontFamily:T.mono}}>{s.v}</div>
+        {/* Price chart */}
+        <Panel style={{ flex: 2, padding: 8, overflow: "hidden" }}>
+          <Lbl>PRICE · {showBB ? "BOLLINGER BANDS · " : ""}{showMA ? "MA20/MA50 · " : ""}VOLUME — 90 DAYS</Lbl>
+          <ResponsiveContainer width="100%" height="92%">
+            <ComposedChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 2 }}>
+              <XAxis dataKey="t" tick={{ fill: MU, fontSize: 8, fontFamily: MN }} tickLine={false} interval={Math.floor(chartData.length / 7)} />
+              <YAxis yAxisId="p" tick={{ fill: MU, fontSize: 8, fontFamily: MN }} tickLine={false} axisLine={false}
+                tickFormatter={v => v > 999 ? "$" + Math.round(v / 1000) + "k" : "$" + v} width={56} />
+              <YAxis yAxisId="v" orientation="right" tick={{ fill: MU, fontSize: 8 }} tickFormatter={v => (v / 1e6).toFixed(0) + "M"} width={34} />
+              <Tooltip content={<ChartTip />} />
+              {showBB && <>
+                <Line yAxisId="p" type="monotone" dataKey="bbUp" stroke={CY} strokeWidth={1} strokeDasharray="4 2" dot={false} name="BB Upper" isAnimationActive={false} />
+                <Line yAxisId="p" type="monotone" dataKey="bbLo" stroke={CY} strokeWidth={1} strokeDasharray="4 2" dot={false} name="BB Lower" isAnimationActive={false} />
+              </>}
+              {showMA && <>
+                <Line yAxisId="p" type="monotone" dataKey="sma20" stroke={AM} strokeWidth={1.5} dot={false} name="MA20" isAnimationActive={false} />
+                <Line yAxisId="p" type="monotone" dataKey="sma50" stroke={BL} strokeWidth={1.5} dot={false} name="MA50" isAnimationActive={false} />
+              </>}
+              <Bar yAxisId="v" dataKey="v" fill={BD2} opacity={0.5} name="Volume" isAnimationActive={false} />
+              <Line yAxisId="p" type="monotone" dataKey="c" stroke={asset.c >= 0 ? G : R} strokeWidth={2} dot={false} name="Close" isAnimationActive={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Panel>
+
+        {/* RSI */}
+        <Panel style={{ height: 96, padding: 8, overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+            <Lbl>RSI(14) — Overbought &gt;70 | Oversold &lt;30</Lbl>
+            <span style={{ fontFamily: MN, fontSize: 10, color: rsiNow > 70 ? R : rsiNow < 30 ? G : CY }}>{rsiNow.toFixed(1)}</span>
+          </div>
+          <ResponsiveContainer width="100%" height="75%">
+            <ComposedChart data={chartData} margin={{ top: 0, right: 4, bottom: 0, left: 2 }}>
+              <XAxis hide />
+              <YAxis domain={[0, 100]} tick={{ fill: MU, fontSize: 8 }} width={26} tickLine={false} axisLine={false} ticks={[0, 30, 50, 70, 100]} />
+              <ReferenceLine y={70} stroke={R} strokeDasharray="3 2" strokeOpacity={0.7} />
+              <ReferenceLine y={30} stroke={G} strokeDasharray="3 2" strokeOpacity={0.7} />
+              <ReferenceLine y={50} stroke={BD2} />
+              <Area type="monotone" dataKey="rsi" stroke={CY} strokeWidth={1.5} fill={CY} fillOpacity={0.07} dot={false} name="RSI" isAnimationActive={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Panel>
+
+        {/* MACD */}
+        <Panel style={{ height: 96, padding: 8, overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+            <Lbl>MACD(12,26,9) — Signal Crossover Strategy</Lbl>
+            <span style={{ fontFamily: MN, fontSize: 10, color: macdNow > sigNow ? G : R }}>{macdNow.toFixed(4)}</span>
+          </div>
+          <ResponsiveContainer width="100%" height="75%">
+            <ComposedChart data={chartData} margin={{ top: 0, right: 4, bottom: 0, left: 2 }}>
+              <XAxis hide />
+              <YAxis tick={{ fill: MU, fontSize: 8 }} width={36} tickLine={false} axisLine={false} />
+              <ReferenceLine y={0} stroke={BD2} />
+              <Bar dataKey="mhist" name="Hist" isAnimationActive={false}>
+                {chartData.map((d, i) => <Cell key={i} fill={d.mhist >= 0 ? G : R} />)}
+              </Bar>
+              <Line type="monotone" dataKey="macd" stroke={CY} strokeWidth={1.5} dot={false} name="MACD" isAnimationActive={false} />
+              <Line type="monotone" dataKey="sig"  stroke={AM} strokeWidth={1.5} dot={false} name="Signal" isAnimationActive={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Panel>
+      </div>
+
+      {/* Stats sidebar */}
+      <div style={{ width: 195, background: BG1, borderLeft: `1px solid ${BD}`, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 14, flexShrink: 0 }}>
+        <div>
+          <Lbl>Risk Metrics</Lbl>
+          {[["Sharpe", ind.sharpe, ""], ["Volatility", ind.sigma, "%/yr"], ["Annual Drift", ind.mu, "%"], ["VaR 95% (1D)", ind.var95, "%"], ["Beta", asset.beta, ""]].map(([l, v, u]) => (
+            <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${BD}22` }}>
+              <span style={{ fontSize: 10, color: MU, fontFamily: MN }}>{l}</span>
+              <span style={{ fontSize: 11, fontFamily: MN, fontWeight: 700, color: typeof v === "number" && v > 0 ? G : typeof v === "number" && v < 0 ? R : WH }}>{v}{u}</span>
             </div>
           ))}
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-          {/* Intraday */}
-          <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-            <Sec dot={T.blue}>{fAsset} — {fFrame} Chart with MA Overlays</Sec>
-            <ResponsiveContainer width="100%" height={210}>
-              <AreaChart data={fData.intraday} margin={{top:5,right:8,bottom:0,left:8}}>
-                <defs>
-                  <linearGradient id="chartGr" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={priceUp?T.green:T.red} stopOpacity={.35}/>
-                    <stop offset="95%" stopColor={priceUp?T.green:T.red} stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="label" tick={{fill:T.muted,fontSize:9}} axisLine={false} tickLine={false} interval={Math.floor(fData.intraday.length/5)}/>
-                <YAxis tick={{fill:T.muted,fontSize:9}} axisLine={false} tickLine={false} domain={["auto","auto"]} tickFormatter={v=>`$${v>1000?(v/1000).toFixed(1)+"k":v}`}/>
-                <Tooltip content={<CTip prefix="$" dec={0}/>}/>
-                <ReferenceLine y={fData.ma20} stroke={T.blue}   strokeDasharray="4 2" strokeWidth={1.5} label={{value:"MA20",fill:T.blue,  fontSize:9,position:"insideTopRight"}}/>
-                <ReferenceLine y={fData.ma50} stroke={T.purple} strokeDasharray="4 2" strokeWidth={1.5} label={{value:"MA50",fill:T.purple,fontSize:9,position:"insideBottomRight"}}/>
-                <Area type="monotone" dataKey="v" stroke={priceUp?T.green:T.red} strokeWidth={2} fill="url(#chartGr)" dot={false} name={fAsset}/>
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* 3/6/12M Forecast */}
-          <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-            <Sec dot={T.purple}>{fHorizon} Forecast — Bull / Base / Bear Scenarios</Sec>
-            <ResponsiveContainer width="100%" height={210}>
-              <LineChart data={fData.forecast} margin={{top:5,right:8,bottom:0,left:8}}>
-                <XAxis dataKey="label" tick={{fill:T.muted,fontSize:9}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:T.muted,fontSize:9}} axisLine={false} tickLine={false} domain={["auto","auto"]} tickFormatter={v=>`$${v>1000?(v/1000).toFixed(0)+"k":v}`}/>
-                <Tooltip content={<CTip prefix="$" dec={0}/>}/>
-                <Legend wrapperStyle={{fontSize:10,color:T.muted,paddingTop:6}}/>
-                <Line type="monotone" dataKey="bull" stroke={T.green}  strokeWidth={2.5} dot={false} name="Bull"/>
-                <Line type="monotone" dataKey="base" stroke={T.blue}   strokeWidth={2}   dot={false} name="Base"/>
-                <Line type="monotone" dataKey="bear" stroke={T.red}    strokeWidth={2}   dot={false} name="Bear" strokeDasharray="5 3"/>
-              </LineChart>
-            </ResponsiveContainer>
+        <div>
+          <Lbl>Technical Signals</Lbl>
+          {signals.map(s => (
+            <div key={s.n} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontSize: 9, fontFamily: MN, color: MU }}>{s.n}</span>
+              <Tag col={s.col}>{s.v}</Tag>
+            </div>
+          ))}
+          <div style={{ marginTop: 8, padding: "9px", border: `1px solid ${sigCol}44`, background: sigCol + "09", textAlign: "center" }}>
+            <Lbl>OVERALL SIGNAL</Lbl>
+            <div style={{ fontFamily: MN, fontWeight: 800, fontSize: 16, color: sigCol }}>{sigLbl}</div>
+            <div style={{ fontSize: 9, color: MU, marginTop: 2 }}>{bulls}/5 indicators bullish</div>
           </div>
         </div>
 
-        {/* Scenario targets */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
-          {[
-            {lb:"🟢 Bull Case",p:last?.bull,chg:bullChg,col:T.green, bg:"#040f07",desc:"Strong accumulation + macro tailwind + institutional inflow"},
-            {lb:"🔵 Base Case",p:last?.base,chg:baseChg,col:T.blue,  bg:"#040b18",desc:"Moderate growth tracking historical seasonal averages"},
-            {lb:"🔴 Bear Case",p:last?.bear,chg:bearChg,col:T.red,   bg:"#140404",desc:"Macro headwinds + risk-off sentiment + regulatory pressure"},
-          ].map((s,i)=>(
-            <div key={i} style={{background:s.bg,border:`1px solid ${s.col}22`,borderRadius:12,padding:18}}>
-              <div style={{fontSize:11,fontWeight:700,color:s.col,marginBottom:8}}>{s.lb} — {fHorizon}</div>
-              <div style={{fontSize:30,fontWeight:900,color:s.col,fontFamily:T.mono,letterSpacing:-1.5,lineHeight:1}}>${s.p?.toLocaleString()}</div>
-              <div style={{fontSize:15,fontWeight:700,color:s.col,marginTop:6,fontFamily:T.mono}}>{s.chg>=0?"+":""}{s.chg}%</div>
-              <div style={{fontSize:11,color:T.muted,marginTop:10,lineHeight:1.55}}>{s.desc}</div>
+        <div>
+          <Lbl>Bollinger Bands</Lbl>
+          {[["Upper", last.bbUp], ["Lower", last.bbLo]].map(([l, v]) => (
+            <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: `1px solid ${BD}22` }}>
+              <span style={{ fontSize: 10, color: MU, fontFamily: MN }}>{l}</span>
+              <span style={{ fontSize: 10, fontFamily: MN, color: WH }}>{v ? fmtPrice(v) : "—"}</span>
             </div>
           ))}
         </div>
 
-        <AIBlock text={fText} loading={fLoading} model={fModel}/>
-      </div>
-    );
-  }
-
-  /* ══════════════════════════════════════════════════════════
-     TAB: NFT
-  ══════════════════════════════════════════════════════════ */
-  function ExplorerTab(){
-    const [view, setView] = useState("nft");
-    const [aiText, setAiText] = useState("");
-    const [aiLoad, setAiLoad] = useState(false);
-
-    async function askAI(topic){
-      setAiLoad(true); setAiText("");
-      try {
-        const t = await callAI([{role:"user", content: topic}],
-          "You are a concise financial analyst. Give specific, useful insights in 3-4 bullet points. Under 150 words.");
-        setAiText(t);
-      } catch(e){ setAiText("⚠️ " + e.message); }
-      setAiLoad(false);
-    }
-
-    const tabs = [{id:"nft",label:"🖼 NFTs"},{id:"funds",label:"📊 Funds"},{id:"upcoming",label:"🔮 Upcoming"}];
-
-    return(
-      <div className="fade-up">
-        {/* Tab toggle */}
-        <div style={{display:"flex",gap:8,marginBottom:20}}>
-          {tabs.map(t=>(
-            <button key={t.id} onClick={()=>{setView(t.id);setAiText("");}}
-              style={{padding:"8px 20px",borderRadius:9,fontSize:13,fontWeight:view===t.id?700:500,
-                background:view===t.id?"linear-gradient(135deg,"+T.purple+","+T.blue+")":"transparent",
-                color:view===t.id?"#fff":T.muted,border:`1px solid ${view===t.id?T.purple:T.border}`}}>
-              {t.label}
-            </button>
+        <div>
+          <Lbl>Moving Averages</Lbl>
+          {[["MA20", last.sma20, AM], ["MA50", last.sma50, BL]].map(([l, v, col]) => (
+            <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: `1px solid ${BD}22` }}>
+              <span style={{ fontSize: 10, fontFamily: MN, color: col }}>{l}</span>
+              <span style={{ fontSize: 10, fontFamily: MN, color: WH }}>{v ? fmtPrice(v) : "—"}</span>
+            </div>
           ))}
         </div>
-
-        {/* NFT View */}
-        {view==="nft" && (
-          <div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14,marginBottom:16}}>
-              {NFTS.map((n,i)=>(
-                <div key={i} style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:18,transition:"border .2s"}}
-                  onMouseEnter={e=>e.currentTarget.style.borderColor=T.purple+"88"}
-                  onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                    <div>
-                      <div style={{fontSize:15,fontWeight:700,color:T.text}}>{n.name}</div>
-                      <div style={{fontSize:11,color:T.muted,marginTop:2}}>{n.sym} · {n.owners.toLocaleString()} owners</div>
-                    </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:18,fontWeight:800,color:T.text,fontFamily:T.mono}}>{n.floor} ETH</div>
-                      <Pct v={n.chg}/>
-                    </div>
-                  </div>
-                  <div style={{fontSize:12,color:T.muted,marginBottom:10}}>{n.fUSD} floor · {n.vol} ETH 7d vol</div>
-                  <SentBar sc={n.sent}/>
-                  <MiniSpark data={n.weekVol.map((v,j)=>({t:j,v}))} color={n.chg>=0?T.green:T.red} h={45}/>
-                  <button onClick={()=>askAI(`Analyze ${n.name} NFT collection. Floor: ${n.floor} ETH (${n.fUSD}), 7d change: ${n.chg}%, volume: ${n.vol} ETH, ${n.owners} owners, sentiment: ${n.sent}/100. Should I buy, hold or avoid? Give specific reasons.`)}
-                    style={{marginTop:10,width:"100%",background:T.purple+"22",color:T.purple,border:`1px solid ${T.purple}44`,borderRadius:7,padding:"7px",fontSize:11,fontWeight:600}}>
-                    🤖 AI Analysis
-                  </button>
-                </div>
-              ))}
-            </div>
-            <AIBlock text={aiText} loading={aiLoad} model="Mistral"/>
-          </div>
-        )}
-
-        {/* Funds View */}
-        {view==="funds" && (
-          <div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead>
-                  <tr style={{borderBottom:`1px solid ${T.border}`}}>
-                    {["Fund","Ticker","NAV","YTD","1Y Ret","3Y Ret","Expense","Risk","Stars",""].map(h=>(
-                      <th key={h} style={{padding:"10px 12px",textAlign:"left",fontSize:10,letterSpacing:1.5,color:T.muted,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {FUNDS.map((f,i)=>(
-                    <tr key={i} style={{borderBottom:`1px solid ${T.border}22`}}
-                      onMouseEnter={e=>e.currentTarget.style.background=T.bg2}
-                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                      <td style={{padding:"12px",color:T.text,fontWeight:600}}>{f.name}</td>
-                      <td style={{padding:"12px",fontFamily:T.mono,color:T.blue,fontSize:11}}>{f.t}</td>
-                      <td style={{padding:"12px",fontFamily:T.mono,color:T.text}}>${f.nav}</td>
-                      <td style={{padding:"12px"}}><Pct v={f.ytd}/></td>
-                      <td style={{padding:"12px"}}><Pct v={f.r1}/></td>
-                      <td style={{padding:"12px"}}><Pct v={f.r3}/></td>
-                      <td style={{padding:"12px",color:T.muted,fontSize:11}}>{f.exp}</td>
-                      <td style={{padding:"12px"}}><Chip color={f.risk==="Low"?T.green:f.risk.includes("High")?T.red:T.yellow}>{f.risk}</Chip></td>
-                      <td style={{padding:"12px",color:T.yellow}}>{"★".repeat(f.stars)}{"☆".repeat(5-f.stars)}</td>
-                      <td style={{padding:"12px"}}>
-                        <button onClick={()=>askAI(`Analyze ${f.name} (${f.t}). NAV $${f.nav}, YTD ${f.ytd}%, 1Y return ${f.r1}%, 3Y return ${f.r3}%, expense ratio ${f.exp}, risk: ${f.risk}. Is this a good investment right now?`)}
-                          style={{background:T.blue+"22",color:T.blue,border:`1px solid ${T.blue}44`,borderRadius:6,padding:"5px 10px",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>
-                          🤖 Ask AI
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <AIBlock text={aiText} loading={aiLoad} model="Mistral"/>
-          </div>
-        )}
-
-        {/* Upcoming View */}
-        {view==="upcoming" && (
-          <div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-              <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20}}>
-                <Sec dot={T.green}>🚀 AI Best Picks — Next 12 Months</Sec>
-                {BEST_PICKS.map((p,i)=>(
-                  <div key={i} style={{borderBottom:i<BEST_PICKS.length-1?`1px solid ${T.border}`:"none",paddingBottom:14,marginBottom:14}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <div style={{width:36,height:36,borderRadius:9,background:`linear-gradient(135deg,${T.green}22,${T.teal}22)`,border:`1px solid ${T.green}33`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:T.green,fontSize:13}}>{p.s}</div>
-                        <div>
-                          <div style={{fontSize:13,fontWeight:700,color:T.text}}>{p.name}</div>
-                          <div style={{fontSize:11,color:T.muted}}>${p.p.toLocaleString()}</div>
-                        </div>
-                      </div>
-                      <Chip color={T.green}>{p.target}</Chip>
-                    </div>
-                    <div style={{fontSize:12,color:T.sub,lineHeight:1.6,marginBottom:8}}>{p.why}</div>
-                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-                      {p.tags.map(t=><Chip key={t} color={T.teal}>{t}</Chip>)}
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{flex:1,height:4,background:T.dim,borderRadius:2}}><div style={{width:`${p.bull}%`,height:"100%",background:`linear-gradient(90deg,${T.green}55,${T.green})`,borderRadius:2}}/></div>
-                      <span style={{fontSize:11,color:T.green,fontFamily:T.mono,fontWeight:700}}>{p.bull}% bullish</span>
-                    </div>
-                    <button onClick={()=>askAI(`Deep dive on ${p.name} (${p.s}). Current price $${p.p}, target ${p.target}. Thesis: ${p.why}. Confirm or challenge this thesis with your own analysis.`)}
-                      style={{marginTop:10,width:"100%",background:T.green+"15",color:T.green,border:`1px solid ${T.green}33`,borderRadius:7,padding:"6px",fontSize:11,fontWeight:600}}>
-                      🤖 Deep Dive Analysis
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20}}>
-                <Sec dot={T.red}>⚠️ AI Risk Warnings — Avoid</Sec>
-                {WORST_PICKS.map((p,i)=>(
-                  <div key={i} style={{borderBottom:i<WORST_PICKS.length-1?`1px solid ${T.border}`:"none",paddingBottom:14,marginBottom:14}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <div style={{width:36,height:36,borderRadius:9,background:`linear-gradient(135deg,${T.red}22,${T.orange}22)`,border:`1px solid ${T.red}33`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:T.red,fontSize:13}}>{p.s}</div>
-                        <div>
-                          <div style={{fontSize:13,fontWeight:700,color:T.text}}>{p.name}</div>
-                          <div style={{fontSize:11,color:T.muted}}>${p.p}</div>
-                        </div>
-                      </div>
-                      <Chip color={T.red}>{p.risk}</Chip>
-                    </div>
-                    <div style={{fontSize:12,color:T.sub,lineHeight:1.6,marginBottom:8}}>{p.why}</div>
-                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{p.tags.map(t=><Chip key={t} color={T.red}>{t}</Chip>)}</div>
-                  </div>
-                ))}
-                <button onClick={()=>askAI(`What are the biggest crypto risks to avoid in 2025? What red flags should investors watch for? Give specific coins and reasons.`)}
-                  style={{marginTop:8,width:"100%",background:T.red+"15",color:T.red,border:`1px solid ${T.red}33`,borderRadius:7,padding:"8px",fontSize:11,fontWeight:600}}>
-                  🤖 Full Risk Analysis
-                </button>
-              </div>
-            </div>
-            <AIBlock text={aiText} loading={aiLoad} model="Mistral"/>
-          </div>
-        )}
       </div>
-    );
-  }
+    </div>
+  );
+});
 
-    /* ══════════════════════════════════════════════════════════
-     TAB: SENTIMENT
-  ══════════════════════════════════════════════════════════ */
-  function SentimentTab(){
-    const avg=Math.round(feed.slice(0,10).reduce((a,p)=>a+p.sc,0)/Math.min(feed.length,10));
-    return(
-      <div className="fade-up">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 340px",gap:16}}>
-          <div>
-            {/* Post box */}
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.blue}>Share Your Market Take</Sec>
-              <p style={{fontSize:12,color:T.muted,marginBottom:12,lineHeight:1.6}}>Indicates whether most users posting on a symbol's stream over the last 24 hours are bullish or bearish. Posts are auto-scored by NLP keyword analysis in real time.</p>
-              <div style={{display:"flex",gap:5,marginBottom:11,flexWrap:"wrap"}}>
-                {["BTC","ETH","SOL","AVAX","BNB","NFT","MKT","LINK","ADA"].map(a=>(
-                  <button key={a} onClick={()=>setPostAsset(a)} style={{background:postAsset===a?T.blue+"20":"transparent",color:postAsset===a?T.blue:T.muted,border:`1px solid ${postAsset===a?T.blue+"55":T.border}`,padding:"5px 12px",borderRadius:7,fontSize:11,fontWeight:600}}>{a}</button>
-                ))}
-              </div>
-              <div style={{display:"flex",gap:10}}>
-                <input style={{flex:1,background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,padding:"11px 14px",color:T.text,fontSize:13,fontFamily:T.sans}} value={postTxt} onChange={e=>setPostTxt(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submitPost()} placeholder={`Your take on ${postAsset}… (NLP will auto-score bullish or bearish)`}/>
-                <button onClick={submitPost} style={{background:T.blue+"22",color:T.blue,border:`1px solid ${T.blue}44`,padding:"11px 22px",borderRadius:8,fontWeight:700,fontSize:13}}>POST</button>
-              </div>
-            </div>
+/* ─────────────────────────────────────────
+   TAB: SCREENER
+───────────────────────────────────────── */
+const TabScreener = memo(function TabScreener({ onSelectAsset }) {
+  const [sortKey, setSortKey] = useState("mc");
+  const [sortDir, setSortDir] = useState(-1);
+  const [region,  setRegion]  = useState("ALL");
+  const [sector,  setSector]  = useState("ALL");
+  const [signal,  setSignal]  = useState("ALL");
+  const [minDiv,  setMinDiv]  = useState("");
+  const [maxPE,   setMaxPE]   = useState("");
 
-            {/* Live feed */}
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.green}>Live Sentiment Stream — {feed.length} Posts</Sec>
-              {feed.map((p,i)=>{
-                const m=sentMeta(p.sc);
-                const bg=p.bull===true?"#040e07":p.bull===false?"#0e0404":T.bg2;
-                const brd=p.bull===true?T.green+"22":p.bull===false?T.red+"22":T.border;
-                return(
-                  <div key={i} style={{background:bg,border:`1px solid ${brd}`,borderRadius:10,padding:14,marginBottom:10}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{width:30,height:30,borderRadius:7,background:`hsl(${(p.u.charCodeAt(0)*37)%360},45%,22%)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:T.text}}>{p.u[0].toUpperCase()}</div>
-                        <span style={{fontWeight:700,fontSize:12,color:T.text}}>@{p.u}</span>
-                      </div>
-                      <div style={{display:"flex",gap:7,alignItems:"center"}}>
-                        <Chip color={p.bull===true?T.green:p.bull===false?T.red:T.muted}>{p.asset}</Chip>
-                        <span style={{fontSize:10,color:T.muted}}>{p.ago}</span>
-                      </div>
-                    </div>
-                    <div style={{fontSize:13,color:T.text,marginBottom:12,lineHeight:1.6}}>{p.txt}</div>
-                    <div style={{display:"flex",alignItems:"center",gap:12}}>
-                      <span style={{fontSize:9,color:T.muted,whiteSpace:"nowrap",letterSpacing:1.2}}>NLP SCORE</span>
-                      <div style={{flex:1}}><SentBar sc={p.sc}/></div>
-                      <span style={{fontSize:11,fontWeight:700,color:m.glow,whiteSpace:"nowrap"}}>{p.bull===true?"🐂 Bullish":p.bull===false?"🐻 Bearish":"⚖️ Neutral"}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+  const regions = useMemo(() => ["ALL", ...new Set(ALL_ASSETS.map(a => a.region))], []);
+  const sectors = useMemo(() => ["ALL", ...new Set(ALL_ASSETS.map(a => a.sector))], []);
 
-          {/* Right column */}
-          <div>
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:"24px 16px",marginBottom:16,textAlign:"center"}}>
-              <SentGauge score={avg} size={300} title="Community Sentiment" sub="Indicates whether most users posting on a symbol's stream over the last 24 hours are bullish or bearish."/>
-              <div style={{marginTop:12,fontSize:11,color:T.muted}}>Based on {feed.length} posts · Updated instantly</div>
-            </div>
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.purple}>Sentiment by Asset</Sec>
-              {CRYPTOS.slice(0,8).map(c=>(<div key={c.s} style={{marginBottom:13}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:5}}><span style={{color:T.text,fontWeight:600}}>{c.s}</span><span style={{color:T.muted,fontSize:11}}>{c.name}</span></div><SentBar sc={c.sent}/></div>))}
-            </div>
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:"20px 16px",marginBottom:16,textAlign:"center"}}>
-              <SentGauge score={68} size={240} title="Fear & Greed Index" sub="Overall crypto market fear and greed over the last 24 hours."/>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ══════════════════════════════════════════════════════════
-     TAB: PORTFOLIO BUILDER
-  ══════════════════════════════════════════════════════════ */
-  function PortfolioTab(){
-    const f=pbForm;
-    const set=(k,v)=>setPbForm(p=>({...p,[k]:v}));
-    const numInput=(k)=>({
-      defaultValue:f[k],
-      key:k+f[k].toString().length, // only re-key when length changes significantly
-      onBlur:e=>set(k,e.target.value),
-      style:iSt,type:"number"
+  const rows = useMemo(() => {
+    let d = ALL_ASSETS.filter(a => {
+      if (region !== "ALL" && a.region !== region) return false;
+      if (sector !== "ALL" && a.sector !== sector) return false;
+      if (minDiv && (a.div === null || a.div < +minDiv)) return false;
+      if (maxPE  && (a.pe  === null || a.pe  > +maxPE))  return false;
+      if (signal === "UP"   && a.c < 0) return false;
+      if (signal === "DOWN" && a.c > 0) return false;
+      return true;
     });
-    const PROVS=["AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"];
-    const RLBL=["","Very Conservative","Conservative","Slightly Conservative","Moderate-Low","Moderate","Moderate-High","Balanced Growth","Growth","Aggressive","Very Aggressive"];
-    const PC=[T.green,T.blue,T.purple,T.orange,T.yellow,T.teal,T.red,T.pink,T.indigo];
+    return [...d].sort((a, b) => ((a[sortKey] ?? -999) - (b[sortKey] ?? -999)) * sortDir);
+  }, [region, sector, signal, minDiv, maxPE, sortKey, sortDir]);
 
-    /* Step 1 */
-    if(pbStep===1) return(
-      <div className="fade-up">
-        <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:28,marginBottom:16,maxWidth:900,margin:"0 auto"}}>
-          <Sec dot={T.blue}>Step 1 of 2 — Your Financial Profile</Sec>
-          <div style={{background:"#050d18",border:`1px solid ${T.blue}20`,borderRadius:10,padding:"12px 16px",marginBottom:20,fontSize:12,color:T.sub,lineHeight:1.65}}>
-            🤖 AI-powered by <span style={{color:T.blue,fontWeight:600}}>Pollinations.ai</span> — 100% free, no API keys. Your data never leaves your browser. Choose your AI model for the analysis.
+  const TH = ({ k, children }) => (
+    <th onClick={() => { setSortDir(d => k === sortKey ? -d : -1); setSortKey(k); }}
+      style={{ padding: "6px 10px", textAlign: "left", fontSize: 9, letterSpacing: 1.5, color: sortKey === k ? AM : MU, cursor: "pointer", whiteSpace: "nowrap", borderBottom: `1px solid ${BD}`, fontFamily: MN, userSelect: "none" }}>
+      {children}{sortKey === k ? (sortDir === -1 ? " ↓" : " ↑") : ""}
+    </th>
+  );
+
+  return (
+    <div style={{ padding: 10 }}>
+      <Panel style={{ marginBottom: 10, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
+        {[["Region", region, setRegion, regions], ["Sector", sector, setSector, sectors], ["Signal", signal, setSignal, ["ALL", "UP", "DOWN"]]].map(([l, val, set, opts]) => (
+          <div key={l}>
+            <Lbl>{l}</Lbl>
+            <select value={val} onChange={e => set(e.target.value)} style={{ ...sSt, minWidth: 110 }}>
+              {opts.map(o => <option key={o}>{o}</option>)}
+            </select>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 28px"}}>
-            <FF label="Your Age"><input {...numInput("age")} min="18" max="80"/></FF>
-            <FF label="Province / Territory"><select style={sSt} value={f.province} onChange={e=>set("province",e.target.value)}>{PROVS.map(p=><option key={p} value={p}>{p}</option>)}</select></FF>
-            <FF label="Annual Income (CAD)" hint="Pre-tax gross income"><input {...numInput("income")} min="0"/></FF>
-            <FF label="Employment Type"><select style={sSt} value={f.jobType} onChange={e=>set("jobType",e.target.value)}><option value="employed">Full-time Employed</option><option value="parttime">Part-time</option><option value="selfemployed">Self-Employed</option><option value="contract">Contract / Freelance</option><option value="student">Student</option><option value="retired">Retired</option></select></FF>
-            <FF label="Marital Status"><select style={sSt} value={f.marital} onChange={e=>set("marital",e.target.value)}><option value="single">Single</option><option value="married">Married/Common-Law</option><option value="divorced">Divorced</option></select></FF>
-            <FF label="Investment Horizon (years)" hint="When will you need this money?"><input {...numInput("horizon")} min="1" max="40"/></FF>
-            <FF label="Total Savings (CAD)" hint="All liquid savings across accounts"><input {...numInput("savingsTotal")} min="0"/></FF>
-            <FF label="Monthly Savings Capacity (CAD)"><input {...numInput("monthlySavings")} min="0"/></FF>
-            <FF label="Total Debt (CAD)" hint="All non-mortgage debt combined"><input {...numInput("debt")} min="0"/></FF>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <FF label="Existing TFSA Balance"><input {...numInput("existingTFSA")} min="0"/></FF>
-              <FF label="Existing RRSP Balance"><input {...numInput("existingRRSP")} min="0"/></FF>
-            </div>
+        ))}
+        <div><Lbl>Min Div %</Lbl><input value={minDiv} onChange={e => setMinDiv(e.target.value)} placeholder="e.g. 2" style={{ ...iSt, width: 70 }} /></div>
+        <div><Lbl>Max P/E</Lbl><input value={maxPE} onChange={e => setMaxPE(e.target.value)} placeholder="e.g. 30" style={{ ...iSt, width: 70 }} /></div>
+        <span style={{ marginLeft: "auto", fontSize: 10, color: MU, fontFamily: MN, alignSelf: "center" }}>{rows.length}/{ALL_ASSETS.length} results</span>
+      </Panel>
+      <Panel style={{ padding: 0, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <thead>
+            <tr>
+              <TH k="s">Ticker</TH><TH k="name">Name</TH><TH k="p">Price</TH>
+              <TH k="c">24H%</TH><TH k="mc">Mkt Cap $B</TH>
+              <TH k="pe">P/E</TH><TH k="div">Div%</TH>
+              <TH k="beta">Beta</TH><TH k="vol">Vol $B</TH>
+              <TH k="sector">Sector</TH><TH k="region">Region</TH>
+              <th style={{ padding: "6px 10px", fontSize: 9, color: MU, borderBottom: `1px solid ${BD}`, fontFamily: MN }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((a, i) => (
+              <tr key={a.s} style={{ borderBottom: `1px solid ${BD}18`, background: i % 2 === 0 ? BG1 : BG }}
+                onMouseEnter={e => e.currentTarget.style.background = BG3}
+                onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? BG1 : BG}>
+                <td style={{ padding: "8px 10px", fontFamily: MN, color: AM, fontWeight: 700 }}>{a.s}</td>
+                <td style={{ padding: "8px 10px", color: WH, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</td>
+                <td style={{ padding: "8px 10px", fontFamily: MN, color: WH, fontWeight: 600 }}>{fmtPrice(a.p)}</td>
+                <td style={{ padding: "8px 10px" }}><Chg v={a.c} /></td>
+                <td style={{ padding: "8px 10px", fontFamily: MN, color: MU }}>{a.mc}</td>
+                <td style={{ padding: "8px 10px", fontFamily: MN, color: a.pe ? MU : BD2 }}>{a.pe ? a.pe + "x" : "—"}</td>
+                <td style={{ padding: "8px 10px", fontFamily: MN, color: a.div ? G : BD2 }}>{a.div ? a.div + "%" : "—"}</td>
+                <td style={{ padding: "8px 10px", fontFamily: MN, color: MU }}>{a.beta}</td>
+                <td style={{ padding: "8px 10px", fontFamily: MN, color: MU }}>{a.vol}</td>
+                <td style={{ padding: "8px 10px" }}><Tag col={BL}>{a.sector}</Tag></td>
+                <td style={{ padding: "8px 10px" }}><Tag col={MU}>{a.region}</Tag></td>
+                <td style={{ padding: "8px 10px" }}>
+                  <button onClick={() => onSelectAsset(a)}
+                    style={{ background: AM + "22", color: AM, border: `1px solid ${AM}55`, fontSize: 9, padding: "3px 8px", fontFamily: MN, cursor: "pointer" }}>
+                    CHART
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+    </div>
+  );
+});
+
+/* ─────────────────────────────────────────
+   TAB: ANALYTICS
+───────────────────────────────────────── */
+const TabAnalytics = memo(function TabAnalytics() {
+  const [mcSym,    setMcSym]    = useState("BTC");
+  const [mcDays,   setMcDays]   = useState("252");
+  const [mcData,   setMcData]   = useState(null);
+  const [mcBusy,   setMcBusy]   = useState(false);
+  const [fcf,      setFcf]      = useState("5.2");
+  const [grow,     setGrow]     = useState("0.08");
+  const [term,     setTerm]     = useState("0.03");
+  const [wacc,     setWacc]     = useState("0.09");
+  const [shares,   setShares]   = useState("15.4");
+  const [dcfMkt,   setDcfMkt]   = useState("189.30");
+  const [dcfRes,   setDcfRes]   = useState(null);
+
+  function runMC() {
+    setMcBusy(true);
+    const a = ALL_ASSETS.find(x => x.s === mcSym) || ALL_ASSETS[0];
+    setTimeout(() => {
+      const hist = genHistory(a.p, a.s);
+      const rets = hist.map(d => d.ret).filter(Boolean);
+      const mu    = rets.reduce((a, b) => a + b, 0) / rets.length * 252;
+      const sigma = Math.sqrt(rets.reduce((a, b) => a + b ** 2, 0) / rets.length * 252);
+      const summary = monteCarlo(a.p, mu, sigma, +mcDays, 300);
+      setMcData({ summary, sigma: +(sigma * 100).toFixed(1), mu: +(mu * 100).toFixed(1), price: a.p });
+      setMcBusy(false);
+    }, 20);
+  }
+
+  function runDCF() {
+    const val = dcfCalc(+fcf, +grow, +term, +wacc, +shares);
+    const mkt = +dcfMkt || 0;
+    setDcfRes({ val, mkt, margin: mkt > 0 ? +(((val - mkt) / val) * 100).toFixed(1) : null });
+  }
+
+  useEffect(() => { runMC(); }, [mcSym, mcDays]);
+
+  const CORR = [
+    { n: "BTC",  BTC: 1.00, ETH: 0.88, SPY: 0.34, GLD: 0.12, AGG: -0.08, QQQ: 0.38 },
+    { n: "ETH",  BTC: 0.88, ETH: 1.00, SPY: 0.31, GLD: 0.10, AGG: -0.06, QQQ: 0.35 },
+    { n: "SPY",  BTC: 0.34, ETH: 0.31, SPY: 1.00, GLD: 0.08, AGG: -0.42, QQQ: 0.92 },
+    { n: "GLD",  BTC: 0.12, ETH: 0.10, SPY: 0.08, GLD: 1.00, AGG:  0.22, QQQ: 0.06 },
+    { n: "AGG",  BTC: -0.08,ETH: -0.06,SPY: -0.42,GLD: 0.22, AGG:  1.00, QQQ:-0.38 },
+    { n: "QQQ",  BTC: 0.38, ETH: 0.35, SPY: 0.92, GLD: 0.06, AGG: -0.38, QQQ: 1.00 },
+  ];
+  const ck = ["BTC", "ETH", "SPY", "GLD", "AGG", "QQQ"];
+
+  return (
+    <div style={{ padding: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      {/* Monte Carlo */}
+      <Panel>
+        <Lbl>Monte Carlo Simulation — Geometric Brownian Motion</Lbl>
+        <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div>
+            <Lbl>Asset</Lbl>
+            <select value={mcSym} onChange={e => setMcSym(e.target.value)} style={{ ...sSt, width: 140 }}>
+              {ALL_ASSETS.map(a => <option key={a.s} value={a.s}>{a.s} — {a.name}</option>)}
+            </select>
           </div>
-          <FF label="Existing Investments" hint="Be specific — AI uses this to avoid recommending what you already hold">
-            <input style={iSt} value={f.existingInvestments} onChange={e=>set("existingInvestments",e.target.value)} placeholder="e.g. $40k in XEQT via Questrade TFSA, condo worth $450k, employer pension…"/>
-          </FF>
-          <FF label="Financial Goals — Select All That Apply">
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {[["retirement","🏖 Retirement"],["emergencyFund","🛡 Emergency Fund"],["homePurchase","🏠 Home Purchase"],["education","🎓 Education"],["business","💼 Business"],["earlyRetirement","⚡ FIRE"],["generational","🌱 Generational Wealth"],["travel","✈️ Travel"]].map(([val,lbl])=>{
-                const active=f.goals.includes(val);
-                return<button key={val} onClick={()=>set("goals",active?f.goals.split(",").filter(g=>g&&g!==val).join(","):[f.goals,val].filter(Boolean).join(","))} style={{background:active?T.purple+"22":"transparent",color:active?T.purple:T.muted,border:`1px solid ${active?T.purple+"55":T.border}`,padding:"8px 14px",borderRadius:8,fontSize:12,fontWeight:active?700:400}}>{lbl}</button>;
-              })}
-            </div>
-          </FF>
-          <FF label={`Risk Appetite — ${f.riskScore}/10 · ${RLBL[parseInt(f.riskScore)]||""}`} hint="1 = capital preservation only · 10 = max growth, can tolerate 50%+ drawdowns">
-            <div style={{display:"flex",alignItems:"center",gap:14}}>
-              <span style={{fontSize:11,color:T.green,fontWeight:700}}>Conservative</span>
-              <input type="range" min="1" max="10" value={f.riskScore} onChange={e=>set("riskScore",e.target.value)} style={{flex:1,accentColor:T.purple}}/>
-              <span style={{fontSize:11,color:T.red,fontWeight:700}}>Aggressive</span>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
-              {[1,2,3,4,5,6,7,8,9,10].map(n=><span key={n} style={{fontSize:11,color:parseInt(f.riskScore)===n?T.purple:T.muted,fontWeight:parseInt(f.riskScore)===n?800:400}}>{n}</span>)}
-            </div>
-          </FF>
-          <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
-            <button onClick={()=>setPbStep(2)} style={{background:`linear-gradient(135deg,${T.blue},${T.purple})`,color:"#fff",padding:"12px 34px",borderRadius:10,fontWeight:800,fontSize:14,border:"none"}}>Continue → Review →</button>
+          <div>
+            <Lbl>Trading Days</Lbl>
+            <select value={mcDays} onChange={e => setMcDays(e.target.value)} style={{ ...sSt, width: 90 }}>
+              {["63", "126", "252", "504"].map(d => <option key={d}>{d}</option>)}
+            </select>
           </div>
+          <button onClick={runMC} disabled={mcBusy}
+            style={{ background: AM + "22", color: AM, border: `1px solid ${AM}`, fontFamily: MN, fontSize: 10, padding: "6px 14px", cursor: "pointer", opacity: mcBusy ? 0.5 : 1 }}>
+            {mcBusy ? "RUNNING…" : "RUN SIM"}
+          </button>
         </div>
-      </div>
-    );
-
-    /* Step 2 */
-    if(pbStep===2){
-      const TFSA_ANNUAL={2009:5000,2010:5000,2011:5000,2012:5000,2013:5500,2014:5500,2015:10000,2016:5500,2017:5500,2018:5500,2019:6000,2020:6000,2021:6000,2022:6000,2023:6500,2024:7000,2025:7000};
-      const startY=Math.max(2009,2026-parseInt(f.age)+18);
-      const tfsaRoom=Object.entries(TFSA_ANNUAL).filter(([y])=>parseInt(y)>=startY&&parseInt(y)<=2025).reduce((s,[,v])=>s+v,0)-parseInt(f.existingTFSA||"0");
-      const rrspRoom=Math.max(0,Math.min(31560,Math.round(parseInt(f.income||"0")*.18))-parseInt(f.existingRRSP||"0"));
-      return(
-        <div className="fade-up">
-          <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:28,marginBottom:16,maxWidth:900,margin:"0 auto"}}>
-            <Sec dot={T.purple}>Step 2 of 2 — Confirm & Build Your Portfolio</Sec>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
-              {[["Age",`${f.age} years old`],["Province",f.province],["Income",`$${parseInt(f.income).toLocaleString()} CAD/yr`],["Status",f.marital+" · "+f.jobType],["Total Savings",`$${parseInt(f.savingsTotal).toLocaleString()} CAD`],["Monthly Capacity",`$${parseInt(f.monthlySavings).toLocaleString()} CAD/mo`],["Debt",`$${parseInt(f.debt||"0").toLocaleString()} CAD`],["Horizon",`${f.horizon} years`],["Risk",`${f.riskScore}/10 — ${RLBL[parseInt(f.riskScore)]}`],["Goals",f.goals.replace(/,/g,", ")]].map(([k,v])=>(
-                <div key={k} style={{background:T.bg2,borderRadius:9,padding:"10px 14px"}}>
-                  <div style={{fontSize:10,color:T.muted,letterSpacing:1.5,marginBottom:4}}>{k.toUpperCase()}</div>
-                  <div style={{fontSize:13,fontWeight:600,color:T.text}}>{v}</div>
-                </div>
-              ))}
-            </div>
-            {/* TFSA / RRSP preview */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
-              <div style={{background:"#040f07",border:`1px solid ${T.green}30`,borderRadius:12,padding:20}}>
-                <div style={{fontSize:9,color:T.green,letterSpacing:2,marginBottom:8}}>🛡 TFSA CONTRIBUTION ROOM</div>
-                <div style={{fontSize:36,fontWeight:900,color:T.green,fontFamily:T.mono,letterSpacing:-1}}>${tfsaRoom.toLocaleString()}</div>
-                <div style={{fontSize:11,color:T.muted,marginTop:8,lineHeight:1.6}}>Cumulative unused room since age 18 (from {startY}). Annual limit 2025: $7,000. All gains & withdrawals permanently tax-free.</div>
-              </div>
-              <div style={{background:"#040b18",border:`1px solid ${T.blue}30`,borderRadius:12,padding:20}}>
-                <div style={{fontSize:9,color:T.blue,letterSpacing:2,marginBottom:8}}>💼 RRSP CONTRIBUTION ROOM</div>
-                <div style={{fontSize:36,fontWeight:900,color:T.blue,fontFamily:T.mono,letterSpacing:-1}}>${rrspRoom.toLocaleString()}</div>
-                <div style={{fontSize:11,color:T.muted,marginTop:8,lineHeight:1.6}}>18% of ${parseInt(f.income).toLocaleString()} = ${Math.min(31560,Math.round(parseInt(f.income)*.18)).toLocaleString()} max. Each dollar reduces taxable income — major tax refund potential.</div>
-              </div>
-            </div>
-            {f.existingInvestments&&<div style={{background:T.bg2,borderRadius:9,padding:"12px 16px",marginBottom:16}}><div style={{fontSize:10,color:T.muted,letterSpacing:1.5,marginBottom:6}}>EXISTING INVESTMENTS (AI will build around these)</div><div style={{fontSize:13,color:T.text}}>{f.existingInvestments}</div></div>}
-            <div style={{marginBottom:18}}>
-              <div style={{fontSize:11,color:T.sub,marginBottom:8,letterSpacing:1.2}}>CHOOSE YOUR AI MODEL</div>
-              <ModelPicker value={pbModel} onChange={setPbModel}/>
-              <div style={{fontSize:11,color:T.muted,marginTop:8}}>{AI_MODELS[pbModel]?.desc}</div>
-            </div>
-            <div style={{display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
-              <button onClick={()=>setPbStep(1)} style={{background:"transparent",color:T.muted,border:`1px solid ${T.border}`,padding:"11px 24px",borderRadius:9,fontWeight:600,fontSize:13}}>← Back</button>
-              <button onClick={buildPortfolio} disabled={pbLoading} style={{background:`linear-gradient(135deg,${T.green},${T.blue})`,color:"#060710",padding:"14px 40px",borderRadius:10,fontWeight:900,fontSize:15,display:"flex",alignItems:"center",gap:10}}>
-                {pbLoading?<><Spinner color="#fff" size={16}/>Building Portfolio…</>:<>🤖 Build My Portfolio</>}
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    /* Step 3: Results */
-    if(pbStep===3&&pbResult){
-      const r=pbResult;
-      const monthly=r.monthlyPlan||{};
-      const projData=[{yr:"Now",val:parseInt(f.savingsTotal)||0},{yr:"5yr",val:r.projections?.yr5||0},{yr:"10yr",val:r.projections?.yr10||0},{yr:"20yr",val:r.projections?.yr20||0},{yr:"Retire",val:r.projections?.retirement||0}];
-      return(
-        <div className="fade-up">
-          {/* Header */}
-          <div style={{background:"linear-gradient(135deg,#060d20,#0a0f28,#070510)",border:`1px solid ${T.blue}28`,borderRadius:14,padding:"24px 28px",marginBottom:16,position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",top:-50,right:-50,width:250,height:250,background:`radial-gradient(circle,${T.purple}08,transparent 70%)`}}/>
-            <div style={{position:"absolute",bottom:-30,left:-30,width:180,height:180,background:`radial-gradient(circle,${T.green}06,transparent 70%)`}}/>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:16,position:"relative"}}>
-              <div>
-                <div style={{fontSize:9,color:T.muted,letterSpacing:2.5,marginBottom:8}}>AI-GENERATED PORTFOLIO — POWERED BY {pbModel.toUpperCase()}</div>
-                <div style={{fontSize:24,fontWeight:900,color:T.text,marginBottom:8,letterSpacing:-.5}}>{r.riskProfile||"Balanced"} Portfolio · {f.province}</div>
-                <div style={{fontSize:13,color:T.sub,lineHeight:1.7,maxWidth:560}}>{r.summary}</div>
-              </div>
-              <div style={{display:"flex",gap:10,flexShrink:0,flexWrap:"wrap"}}>
-                <div style={{background:"#040f07",border:`1px solid ${T.green}30`,borderRadius:10,padding:"14px 18px",textAlign:"center"}}>
-                  <div style={{fontSize:9,color:T.green,letterSpacing:2,marginBottom:6}}>TFSA ROOM</div>
-                  <div style={{fontSize:24,fontWeight:900,color:T.green,fontFamily:T.mono}}>${(r.tfsaRoom||0).toLocaleString()}</div>
-                </div>
-                <div style={{background:"#040b18",border:`1px solid ${T.blue}30`,borderRadius:10,padding:"14px 18px",textAlign:"center"}}>
-                  <div style={{fontSize:9,color:T.blue,letterSpacing:2,marginBottom:6}}>RRSP ROOM</div>
-                  <div style={{fontSize:24,fontWeight:900,color:T.blue,fontFamily:T.mono}}>${(r.rrspRoom||0).toLocaleString()}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{display:"grid",gridTemplateColumns:"1.1fr 1fr",gap:16}}>
-            {/* Allocation */}
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.purple}>Recommended Asset Allocation</Sec>
-              <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-                <PieChart width={195} height={195}>
-                  <Pie data={r.allocation||[]} cx={97} cy={97} outerRadius={88} innerRadius={48} dataKey="pct" paddingAngle={3}>
-                    {(r.allocation||[]).map((_,i)=><Cell key={i} fill={PC[i%PC.length]}/>)}
-                  </Pie>
-                  <Tooltip contentStyle={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12}} formatter={(v,n,p)=>[`${v}%`,p.payload.label]}/>
-                </PieChart>
-                <div style={{flex:1,minWidth:140}}>
-                  {(r.allocation||[]).map((a,i)=>(
-                    <div key={i} style={{marginBottom:10}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                        <div style={{display:"flex",alignItems:"center",gap:7}}><div style={{width:9,height:9,borderRadius:2,background:PC[i%PC.length],flexShrink:0}}/><span style={{fontSize:12,color:T.text,fontWeight:600}}>{a.label}</span></div>
-                        <span style={{fontSize:13,fontWeight:800,color:PC[i%PC.length],fontFamily:T.mono}}>{a.pct}%</span>
-                      </div>
-                      <div style={{fontSize:10,color:T.muted,marginLeft:16}}>${(a.amount||0).toLocaleString()} · {a.rationale}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Monthly plan */}
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.green}>Monthly Contribution Plan</Sec>
-              {[{l:"TFSA Contribution",    v:monthly.tfsa||0,      c:T.green,  icon:"🛡"},{l:"RRSP Contribution",   v:monthly.rrsp||0,      c:T.blue,   icon:"💼"},{l:"Emergency Fund",      v:monthly.emergency||0, c:T.teal,   icon:"🔒"},{l:"Taxable Investments",  v:monthly.investments||0,c:T.purple, icon:"📈"},{l:"Debt Paydown",          v:monthly.debtPaydown||0,c:T.orange, icon:"💳"}].map((m,i)=>(
-                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:i<4?`1px solid ${T.dim}`:"none"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:17}}>{m.icon}</span><span style={{fontSize:13,color:T.text}}>{m.l}</span></div>
-                  <span style={{fontFamily:T.mono,fontWeight:900,fontSize:17,color:m.c}}>${m.v.toLocaleString()}<span style={{fontSize:11,color:T.muted,fontWeight:400}}>/mo</span></span>
-                </div>
-              ))}
-              <div style={{borderTop:`1px solid ${T.border2}`,marginTop:8,paddingTop:12,display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontWeight:700,color:T.text,fontSize:14}}>Total Monthly</span>
-                <span style={{fontFamily:T.mono,fontWeight:900,color:T.yellow,fontSize:18}}>${Object.values(monthly).reduce((a,v)=>a+(v||0),0).toLocaleString()}<span style={{fontSize:12,color:T.muted,fontWeight:400}}>/mo</span></span>
-              </div>
-            </div>
-          </div>
-
-          {/* Holdings */}
-          <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-            <Sec dot={T.blue}>Recommended Holdings</Sec>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:10}}>
-              {(r.holdings||[]).map((h,i)=>(
-                <div key={i} style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:10,padding:14}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                    <span style={{fontSize:16,fontWeight:900,color:T.text,fontFamily:T.mono}}>{h.ticker}</span>
-                    <div style={{display:"flex",gap:5}}>
-                      <Chip color={h.account==="TFSA"?T.green:h.account==="RRSP"?T.blue:T.muted}>{h.account}</Chip>
-                      <Chip color={T.purple}>{h.weight}%</Chip>
-                    </div>
-                  </div>
-                  <div style={{fontSize:12,color:T.text,marginBottom:4,fontWeight:600}}>{h.name}</div>
-                  <div style={{fontSize:10,color:T.muted,marginBottom:6}}>{h.type}</div>
-                  <div style={{fontSize:11,color:T.sub,lineHeight:1.5}}>{h.reason}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Projection chart */}
-          <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-            <Sec dot={T.yellow}>📈 Portfolio Growth Projection</Sec>
-            <ResponsiveContainer width="100%" height={190}>
-              <AreaChart data={projData} margin={{top:5,right:20,bottom:0,left:20}}>
-                <defs><linearGradient id="projGr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={T.green} stopOpacity={.4}/><stop offset="95%" stopColor={T.green} stopOpacity={0}/></linearGradient></defs>
-                <XAxis dataKey="yr" tick={{fill:T.muted,fontSize:13}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:T.muted,fontSize:11}} axisLine={false} tickLine={false} tickFormatter={v=>`$${v>=1000000?(v/1000000).toFixed(1)+"M":(v/1000).toFixed(0)+"k"}`}/>
-                <Tooltip content={<CTip prefix="$" dec={0}/>}/>
-                <Area type="monotone" dataKey="val" stroke={T.green} strokeWidth={2.5} fill="url(#projGr)" dot={{fill:T.green,r:5,strokeWidth:0}} name="Portfolio Value"/>
+        {mcData && (
+          <>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={mcData.summary} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+                <XAxis dataKey="day" tick={{ fill: MU, fontSize: 9, fontFamily: MN }} tickFormatter={d => "D" + d} />
+                <YAxis tick={{ fill: MU, fontSize: 9, fontFamily: MN }} tickFormatter={v => v > 999 ? "$" + Math.round(v / 1000) + "k" : "$" + v} width={56} />
+                <Tooltip formatter={(v, n) => ["$" + Number(v).toLocaleString(), n]} labelFormatter={l => "Day " + l} />
+                <Area type="monotone" dataKey="p90" stroke="transparent" fill={G} fillOpacity={0.06} name="P90" isAnimationActive={false} />
+                <Area type="monotone" dataKey="p75" stroke={G} strokeWidth={1} fill={G} fillOpacity={0.10} name="P75" isAnimationActive={false} />
+                <Line type="monotone" dataKey="p50" stroke={AM} strokeWidth={2.5} dot={false} name="Median" isAnimationActive={false} />
+                <Area type="monotone" dataKey="p25" stroke={R} strokeWidth={1} fill={R} fillOpacity={0.08} name="P25" isAnimationActive={false} />
+                <Area type="monotone" dataKey="p10" stroke="transparent" fill={R} fillOpacity={0.05} name="P10" isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginTop:14}}>
-              {[{l:"5 Years",v:r.projections?.yr5},{l:"10 Years",v:r.projections?.yr10},{l:"20 Years",v:r.projections?.yr20},{l:"Retirement",v:r.projections?.retirement}].map((p,i)=>(
-                <div key={i} style={{background:T.bg2,borderRadius:8,padding:"12px 14px",textAlign:"center"}}>
-                  <div style={{fontSize:10,color:T.muted,letterSpacing:1.5,marginBottom:6}}>{p.l.toUpperCase()}</div>
-                  <div style={{fontSize:18,fontWeight:800,color:T.green,fontFamily:T.mono}}>${p.v>=1000000?((p.v/1000000).toFixed(1)+"M"):(p.v/1000).toFixed(0)+"k"}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 10 }}>
+              {[["Bull P90", mcData.summary.at(-1)?.p90, G], ["Median P50", mcData.summary.at(-1)?.p50, AM], ["Bear P10", mcData.summary.at(-1)?.p10, R]].map(([l, v, col]) => (
+                <div key={l} style={{ background: BG3, padding: "8px", border: `1px solid ${col}30`, textAlign: "center" }}>
+                  <Lbl>{l}</Lbl>
+                  <div style={{ fontFamily: MN, fontWeight: 700, color: col, fontSize: 13 }}>{v ? fmtPrice(v) : "—"}</div>
+                  {v && <div style={{ fontSize: 9, color: MU, marginTop: 2 }}>{((v - mcData.price) / mcData.price * 100).toFixed(1)}%</div>}
                 </div>
               ))}
             </div>
-          </div>
+            <div style={{ fontSize: 9, color: MU, marginTop: 6, fontFamily: MN }}>σ={mcData.sigma}%/yr · μ={mcData.mu}%/yr · 300 paths · GBM · {mcDays} days</div>
+          </>
+        )}
+      </Panel>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-            {/* Action plan */}
-            <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-              <Sec dot={T.teal}>✅ Immediate Action Plan</Sec>
-              {(r.keyActions||[]).map((a,i)=>(
-                <div key={i} style={{display:"flex",gap:12,marginBottom:12,padding:"10px 14px",background:T.bg2,borderRadius:8}}>
-                  <div style={{width:24,height:24,borderRadius:"50%",background:T.teal+"22",color:T.teal,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{i+1}</div>
-                  <span style={{fontSize:13,color:T.text,lineHeight:1.55}}>{a}</span>
-                </div>
-              ))}
-            </div>
-
-            <div>
-              {/* Tax tips */}
-              <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-                <Sec dot={T.yellow}>🇨🇦 Canadian Tax Optimization</Sec>
-                <div style={{background:"#040f07",border:`1px solid ${T.green}20`,borderRadius:8,padding:"12px 14px",marginBottom:10}}>
-                  <div style={{fontSize:9,color:T.green,letterSpacing:1.5,marginBottom:6}}>TFSA STRATEGY</div>
-                  <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{r.tfsaStrategy}</div>
-                </div>
-                <div style={{background:"#040b18",border:`1px solid ${T.blue}20`,borderRadius:8,padding:"12px 14px",marginBottom:10}}>
-                  <div style={{fontSize:9,color:T.blue,letterSpacing:1.5,marginBottom:6}}>RRSP STRATEGY</div>
-                  <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{r.rrspStrategy}</div>
-                </div>
-                {(r.taxTips||[]).map((tip,i)=>(
-                  <div key={i} style={{display:"flex",gap:8,marginBottom:8,fontSize:12,color:T.sub,lineHeight:1.55}}>
-                    <span style={{color:T.yellow,flexShrink:0}}>💡</span>{tip}
-                  </div>
-                ))}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* DCF */}
+        <Panel>
+          <Lbl>DCF Intrinsic Value — Discounted Cash Flow Model</Lbl>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            {[["Free Cash Flow ($B)", fcf, setFcf], ["5Y Growth Rate", grow, setGrow], ["Terminal Growth", term, setTerm], ["WACC", wacc, setWacc], ["Shares Out. (B)", shares, setShares], ["Current Mkt Price $", dcfMkt, setDcfMkt]].map(([l, v, set]) => (
+              <div key={l}>
+                <Lbl>{l}</Lbl>
+                <input value={v} onChange={e => set(e.target.value)} style={iSt} type="number" step="any" />
               </div>
-
-              {(r.warnings?.length>0)&&(
-                <div style={{background:"#0e0a03",border:`1px solid ${T.orange}28`,borderRadius:14,padding:20,marginBottom:16}}>
-                  <Sec dot={T.orange}>⚠️ Risk Warnings</Sec>
-                  {r.warnings.map((w,i)=><div key={i} style={{fontSize:12,color:T.sub,marginBottom:6,lineHeight:1.55}}>• {w}</div>)}
+            ))}
+          </div>
+          <button onClick={runDCF}
+            style={{ width: "100%", background: G + "22", color: G, border: `1px solid ${G}`, fontFamily: MN, fontSize: 11, padding: "8px", cursor: "pointer", letterSpacing: 2 }}>
+            CALCULATE INTRINSIC VALUE
+          </button>
+          {dcfRes && (
+            <div style={{ marginTop: 10, background: BG3, padding: 12, border: `1px solid ${dcfRes.margin > 0 ? G : R}30` }}>
+              <Lbl>Intrinsic Value Per Share</Lbl>
+              <div style={{ fontFamily: MN, fontWeight: 800, fontSize: 26, color: G }}>${dcfRes.val.toLocaleString()}</div>
+              {dcfRes.margin !== null && (
+                <div style={{ display: "flex", gap: 14, marginTop: 6, fontSize: 11, fontFamily: MN }}>
+                  <span style={{ color: MU }}>Market: <span style={{ color: WH }}>${dcfRes.mkt}</span></span>
+                  <span style={{ color: dcfRes.margin > 0 ? G : R, fontWeight: 700 }}>
+                    {dcfRes.margin > 0 ? "UNDERVALUED" : "OVERVALUED"} {Math.abs(dcfRes.margin)}%
+                  </span>
                 </div>
               )}
             </div>
-          </div>
+          )}
+        </Panel>
 
-          <div style={{textAlign:"center",marginBottom:20}}>
-            <button onClick={()=>{setPbStep(1);setPbResult(null);}} style={{background:"transparent",color:T.muted,border:`1px solid ${T.border}`,padding:"11px 30px",borderRadius:9,fontWeight:600,fontSize:13,marginRight:10}}>← Start Over</button>
-            <button onClick={()=>window.print()} style={{background:T.purple+"22",color:T.purple,border:`1px solid ${T.purple}44`,padding:"11px 30px",borderRadius:9,fontWeight:600,fontSize:13}}>🖨 Print / Save PDF</button>
-          </div>
-        </div>
-      );
+        {/* Correlation */}
+        <Panel>
+          <Lbl>Asset Correlation Matrix</Lbl>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: MN, fontSize: 10 }}>
+            <thead><tr>
+              <th style={{ padding: "4px 6px", color: MU, fontSize: 9 }}></th>
+              {ck.map(k => <th key={k} style={{ padding: "4px 6px", color: AM, fontSize: 9, textAlign: "center" }}>{k}</th>)}
+            </tr></thead>
+            <tbody>
+              {CORR.map(row => (
+                <tr key={row.n}>
+                  <td style={{ padding: "4px 6px", color: AM, fontWeight: 700, fontSize: 9 }}>{row.n}</td>
+                  {ck.map(k => {
+                    const v = row[k];
+                    const col = v >= 0.7 ? G : v >= 0.4 ? AM : v <= -0.3 ? R : MU;
+                    return <td key={k} style={{ padding: "4px 6px", textAlign: "center", color: col, fontWeight: k === row.n ? 700 : 400, background: k === row.n ? BG3 : "transparent" }}>{v.toFixed(2)}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ fontSize: 9, color: MU, marginTop: 6 }}>Green=high positive · Yellow=low · Red=negative correlation</div>
+        </Panel>
+      </div>
+    </div>
+  );
+});
+
+/* ─────────────────────────────────────────
+   TAB: OPTIONS
+───────────────────────────────────────── */
+const TabOptions = memo(function TabOptions({ asset }) {
+  const [S,    setS]    = useState(() => String(asset.p));
+  const [K,    setK]    = useState(() => String(asset.p));
+  const [T,    setT]    = useState("0.25");
+  const [r,    setR]    = useState("0.0525");
+  const [iv,   setIv]   = useState("0.28");
+  const [type, setType] = useState("call");
+  const [res,  setRes]  = useState(null);
+
+  const prevSymRef = useRef(asset.s);
+  useEffect(() => {
+    if (prevSymRef.current !== asset.s) {
+      setS(String(asset.p));
+      setK(String(asset.p));
+      setRes(null);
+      prevSymRef.current = asset.s;
     }
+  }, [asset.s]);
 
-    return<div style={{color:T.muted,padding:40,textAlign:"center"}}><Spinner color={T.purple} size={24}/></div>;
-  }
+  function calc() { setRes(bsGreeks(+S, +K, +T, +r, +iv, type)); }
 
-  /* ══════════════════════════════════════════════════════════
-     TAB: MODEL COMPARE
-  ══════════════════════════════════════════════════════════ */
-  function CompareTab(){
-    const PRESETS=["Should I buy BTC now or wait?","Is the NFT market recovering?","Compare TFSA vs RRSP priority","Best ETF for a 30-year-old Canadian","Will SOL outperform ETH in 2025?","Is ARKK worth investing in?"];
-    const allDone=Object.keys(cmpResults).length===4&&Object.values(cmpLoading).every(v=>!v);
-    return(
-      <div className="fade-up">
-        <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-          <Sec dot={T.pink}>🆚 Ask All 4 Models — Side-by-Side Comparison</Sec>
-          <p style={{fontSize:12,color:T.muted,marginBottom:16,lineHeight:1.65}}>Ask any financial question and get answers from GPT-4o, Gemini Flash, Mistral, and Llama 3.3 simultaneously. Compare their reasoning, priorities, and unique perspectives — all free.</p>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
-            {PRESETS.map(p=><button key={p} onClick={()=>setCmpTopic(p)} style={{background:T.bg2,border:`1px solid ${T.border}`,color:T.muted,padding:"6px 12px",borderRadius:7,fontSize:11}}>{p}</button>)}
-          </div>
-          <div style={{display:"flex",gap:10}}>
-            <input value={cmpTopic} onChange={e=>setCmpTopic(e.target.value)} onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter")runComparison();}} placeholder="Type any financial question — all 4 AI models will answer simultaneously…" style={{...iSt,flex:1,padding:"12px 14px"}}/>
-            <button onClick={runComparison} disabled={!cmpTopic.trim()||Object.values(cmpLoading).some(v=>v)} style={{background:`linear-gradient(135deg,${T.pink},${T.purple})`,color:"#fff",padding:"12px 28px",borderRadius:9,fontWeight:800,fontSize:13,display:"flex",alignItems:"center",gap:8}}>
-              {Object.values(cmpLoading).some(v=>v)?<><Spinner color="#fff" size={14}/>Running…</>:"🆚 Compare All"}
+  const chain = useMemo(() => {
+    const base = +S || asset.p;
+    return Array.from({ length: 11 }, (_, i) => {
+      const strike = +(base * (0.90 + i * 0.02)).toFixed(base < 10 ? 3 : base < 100 ? 1 : 0);
+      const call   = bsGreeks(base, strike, +T, +r, +iv, "call");
+      const put    = bsGreeks(base, strike, +T, +r, +iv, "put");
+      return { strike, call: call.price, put: put.price, delta: call.delta, itm: strike < base };
+    });
+  }, [S, T, r, iv, asset.s]);
+
+  return (
+    <div style={{ padding: 10, display: "grid", gridTemplateColumns: "320px 1fr", gap: 10 }}>
+      <Panel>
+        <Lbl>Black-Scholes-Merton Pricer — {asset.s}</Lbl>
+        <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+          {["call", "put"].map(t => (
+            <button key={t} onClick={() => setType(t)}
+              style={{ flex: 1, padding: "7px", background: type === t ? (t === "call" ? G : R) + "22" : "transparent", color: type === t ? (t === "call" ? G : R) : MU, border: `1px solid ${type === t ? (t === "call" ? G : R) : BD}`, fontFamily: MN, fontSize: 11, cursor: "pointer", textTransform: "uppercase", letterSpacing: 2 }}>
+              {t}
             </button>
+          ))}
+        </div>
+        {[["Spot Price (S)", S, setS], ["Strike Price (K)", K, setK], ["Time to Expiry (yr)", T, setT], ["Risk-Free Rate", r, setR], ["Implied Volatility (σ)", iv, setIv]].map(([l, v, set]) => (
+          <div key={l} style={{ marginBottom: 8 }}>
+            <Lbl>{l}</Lbl>
+            <input value={v} onChange={e => set(e.target.value)} style={iSt} type="number" step="any" />
           </div>
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-          {["GPT-4o","Gemini Flash","Mistral","Llama 3.3"].map(modelKey=>{
-            const m=AI_MODELS[modelKey];
-            const loading=cmpLoading[modelKey];
-            const result=cmpResults[modelKey];
-            return(
-              <div key={modelKey} style={{background:T.bg1,border:`1px solid ${m.color}30`,borderRadius:14,padding:20,position:"relative",overflow:"hidden"}}>
-                <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,background:`radial-gradient(circle,${m.color}08,transparent 70%)`}}/>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-                  <span style={{fontSize:22}}>{m.badge}</span>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:800,color:m.color}}>{modelKey}</div>
-                    <div style={{fontSize:10,color:T.muted}}>{m.desc}</div>
-                  </div>
+        ))}
+        <button onClick={calc}
+          style={{ width: "100%", background: AM + "22", color: AM, border: `1px solid ${AM}`, fontFamily: MN, fontSize: 11, padding: "9px", cursor: "pointer", letterSpacing: 2, marginTop: 4 }}>
+          PRICE OPTION
+        </button>
+        {res && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontFamily: MN, fontWeight: 800, fontSize: 24, color: AM, marginBottom: 10 }}>${res.price}</div>
+            {[["Delta Δ", res.delta, "$ change per $1 move in S"], ["Gamma Γ", res.gamma, "Rate of change of delta"], ["Theta Θ", res.theta, "Value decay per calendar day"], ["Vega ν", res.vega, "Value change per 1% IV move"], ["Rho ρ", res.rho, "Value change per 1% rate move"]].map(([l, v, d]) => (
+              <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${BD}` }}>
+                <div>
+                  <div style={{ fontFamily: MN, color: WH, fontSize: 11 }}>{l}</div>
+                  <div style={{ fontSize: 9, color: MU }}>{d}</div>
                 </div>
-                {!loading&&!result&&(
-                  <div style={{fontSize:12,color:T.muted,fontStyle:"italic"}}>Ask a question above to see this model's answer…</div>
-                )}
-                {loading&&<div style={{display:"flex",alignItems:"center",gap:10,color:T.sub,fontSize:13}}><Spinner color={m.color}/><span style={{animation:"blink 1.5s infinite"}}>Analyzing…</span></div>}
-                {result&&!loading&&<div style={{fontSize:13,color:T.text,lineHeight:1.75,whiteSpace:"pre-wrap"}}>{result}</div>}
+                <span style={{ fontFamily: MN, fontSize: 12, fontWeight: 700, color: v > 0 ? G : v < 0 ? R : WH }}>{v}</span>
               </div>
-            );
-          })}
-        </div>
-
-        {allDone&&Object.keys(cmpResults).length===4&&(
-          <div style={{background:"#080c1a",border:`1px solid ${T.pink}25`,borderRadius:14,padding:20,marginTop:4}}>
-            <Sec dot={T.pink}>📊 Model Comparison Summary</Sec>
-            <p style={{fontSize:12,color:T.muted,lineHeight:1.65}}>
-              Each model brings unique strengths: <span style={{color:AI_MODELS["GPT-4o"].color}}>GPT-4o</span> excels at comprehensive analysis, <span style={{color:AI_MODELS["Gemini Flash"].color}}>Gemini Flash</span> at structured data, <span style={{color:AI_MODELS["Mistral"].color}}>Mistral</span> at risk assessment, and <span style={{color:AI_MODELS["Llama 3.3"].color}}>Llama 3.3</span> at crypto/DeFi specifics. Use points of agreement as higher-confidence signals.
-            </p>
+            ))}
           </div>
         )}
+      </Panel>
+
+      <Panel>
+        <Lbl>Options Chain — {asset.s} @ {fmtPrice(+S || asset.p)} | T={T}yr | σ={iv}</Lbl>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: MN, fontSize: 11 }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${BD}` }}>
+              {["Call Price", "Call Δ", "Strike", "ITM/OTM", "Put Price", "Put Δ"].map(h => (
+                <th key={h} style={{ padding: "7px 12px", textAlign: "center", fontSize: 9, color: MU, letterSpacing: 1.5 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {chain.map((row, i) => (
+              <tr key={i} style={{ background: row.itm ? G + "08" : BG, borderBottom: `1px solid ${BD}18` }}>
+                <td style={{ padding: "7px 12px", textAlign: "center", color: G, fontWeight: 700 }}>${row.call}</td>
+                <td style={{ padding: "7px 12px", textAlign: "center", color: MU }}>{row.delta.toFixed(3)}</td>
+                <td style={{ padding: "7px 12px", textAlign: "center", color: AM, fontWeight: 800, fontSize: 12 }}>{fmtPrice(row.strike)}</td>
+                <td style={{ padding: "7px 12px", textAlign: "center" }}><Tag col={row.itm ? G : MU}>{row.itm ? "ITM" : "OTM"}</Tag></td>
+                <td style={{ padding: "7px 12px", textAlign: "center", color: R, fontWeight: 700 }}>${row.put}</td>
+                <td style={{ padding: "7px 12px", textAlign: "center", color: MU }}>{(row.delta - 1).toFixed(3)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+    </div>
+  );
+});
+
+/* ─────────────────────────────────────────
+   TAB: FOREX
+───────────────────────────────────────── */
+const TabForex = memo(function TabForex() {
+  const [fromCur, setFromCur] = useState("USD");
+  const [toCur,   setToCur]   = useState("CAD");
+  const [amount,  setAmount]  = useState("1000");
+  const curs = Object.keys(FX_RATES);
+  const converted = ((+amount || 0) / FX_RATES[fromCur] * FX_RATES[toCur]).toFixed(4);
+  const rate = (FX_RATES[toCur] / FX_RATES[fromCur]).toFixed(6);
+
+  return (
+    <div style={{ padding: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 10 }}>
+        <Panel style={{ padding: 0, overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {["Pair", "Rate", "24H Chg", "Open", "Day High", "Day Low", "Spread (pip)"].map(h => (
+                  <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 9, letterSpacing: 1.5, color: MU, borderBottom: `1px solid ${BD}`, fontFamily: MN }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {FOREX_DATA.map((f, i) => (
+                <tr key={f.pair} style={{ borderBottom: `1px solid ${BD}18`, background: i % 2 === 0 ? BG1 : BG }}
+                  onMouseEnter={e => e.currentTarget.style.background = BG3}
+                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? BG1 : BG}>
+                  <td style={{ padding: "9px 12px", fontFamily: MN, color: AM, fontWeight: 700, fontSize: 12 }}>{f.pair}</td>
+                  <td style={{ padding: "9px 12px", fontFamily: MN, color: WH, fontWeight: 700, fontSize: 13 }}>{f.rate}</td>
+                  <td style={{ padding: "9px 12px" }}><Chg v={f.c} /></td>
+                  <td style={{ padding: "9px 12px", fontFamily: MN, color: MU, fontSize: 11 }}>{f.open}</td>
+                  <td style={{ padding: "9px 12px", fontFamily: MN, color: G, fontSize: 11 }}>{f.h}</td>
+                  <td style={{ padding: "9px 12px", fontFamily: MN, color: R, fontSize: 11 }}>{f.l}</td>
+                  <td style={{ padding: "9px 12px", fontFamily: MN, color: MU, fontSize: 11 }}>{f.spread}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Panel>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Panel>
+            <Lbl>Currency Converter</Lbl>
+            <div style={{ marginBottom: 8 }}>
+              <Lbl>Amount</Lbl>
+              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} style={iSt} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+              <div><Lbl>From</Lbl><select value={fromCur} onChange={e => setFromCur(e.target.value)} style={sSt}>{curs.map(c => <option key={c}>{c}</option>)}</select></div>
+              <div><Lbl>To</Lbl><select value={toCur} onChange={e => setToCur(e.target.value)} style={sSt}>{curs.map(c => <option key={c}>{c}</option>)}</select></div>
+            </div>
+            <div style={{ background: BG3, padding: 12, border: `1px solid ${G}30`, textAlign: "center" }}>
+              <div style={{ fontSize: 9, color: MU, marginBottom: 4, fontFamily: MN }}>1 {fromCur} = {rate} {toCur}</div>
+              <div style={{ fontFamily: MN, fontWeight: 700, fontSize: 20, color: G }}>{Number(converted).toLocaleString(undefined, { maximumFractionDigits: 4 })} {toCur}</div>
+              <div style={{ fontSize: 10, color: MU, marginTop: 4 }}>{amount} {fromCur}</div>
+            </div>
+          </Panel>
+          <Panel>
+            <Lbl>USD Cross Rates</Lbl>
+            {curs.filter(c => c !== "USD").map(c => (
+              <div key={c} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${BD}18` }}>
+                <span style={{ fontFamily: MN, fontSize: 11, color: MU }}>USD/{c}</span>
+                <span style={{ fontFamily: MN, fontSize: 11, color: WH, fontWeight: 700 }}>{FX_RATES[c].toFixed(4)}</span>
+              </div>
+            ))}
+          </Panel>
+        </div>
       </div>
-    );
+    </div>
+  );
+});
+
+/* ─────────────────────────────────────────
+   TAB: PORTFOLIO
+───────────────────────────────────────── */
+const TFSA_LIMITS = {2009:5000,2010:5000,2011:5000,2012:5000,2013:5500,2014:5500,2015:10000,2016:5500,2017:5500,2018:5500,2019:6000,2020:6000,2021:6000,2022:6000,2023:6500,2024:7000,2025:7000};
+
+const TabPortfolio = memo(function TabPortfolio() {
+  const [invest,  setInvest]   = useState("50000");
+  const [age,     setAge]      = useState("32");
+  const [income,  setIncome]   = useState("95000");
+  const [eTFSA,   setETFSA]    = useState("21000");
+  const [eRRSP,   setERRSP]    = useState("12000");
+  const [province,setProv]     = useState("Ontario");
+  const [holdings, setHoldings] = useState([
+    { id: 1, s: "SPY",      pct: 30, ret: "0.18", vol: "0.15" },
+    { id: 2, s: "QQQ",      pct: 20, ret: "0.22", vol: "0.20" },
+    { id: 3, s: "ZAG.TO",   pct: 20, ret: "0.04", vol: "0.05" },
+    { id: 4, s: "GLD",      pct: 10, ret: "0.12", vol: "0.14" },
+    { id: 5, s: "BTC",      pct: 10, ret: "0.60", vol: "0.65" },
+    { id: 6, s: "XEQT.TO",  pct: 10, ret: "0.16", vol: "0.14" },
+  ]);
+
+  const nextId = useRef(10);
+
+  function updateH(id, key, val) {
+    setHoldings(prev => prev.map(h => h.id === id ? { ...h, [key]: key === "s" ? val : key === "pct" ? Math.max(0, +val || 0) : val } : h));
   }
 
-  /* ══════════════════════════════════════════════════════════
-     TAB: AI ANALYST CHAT
-  ══════════════════════════════════════════════════════════ */
-  function AITab(){
-    const QUICK=["Best crypto to buy now?","TFSA vs RRSP — which first?","Is BTC overvalued at $67k?","Top ETFs for a Canadian investor","NFT market outlook 2025","Is ARKK worth holding?","How do I build a $1M portfolio?","Explain the SUI bull case","Safe yield strategies for 2025","Should I pay debt or invest first?","LUNC — dead or recoverable?","What does RSI 70 mean?"];
-    return(
-      <div className="fade-up" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 155px)",gap:12}}>
-        {/* Controls */}
-        <div style={{background:T.bg1,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 18px",flexShrink:0}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:10}}>
-            <Sec style={{marginBottom:0}}>AI Financial Analyst Chat</Sec>
-            <ModelPicker value={aiModel} onChange={setAiModel} compact/>
-          </div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {QUICK.map(q=><button key={q} onClick={()=>setAiInput(q)} style={{background:T.bg2,border:`1px solid ${T.border}`,color:T.muted,padding:"5px 10px",borderRadius:6,fontSize:11}}>{q}</button>)}
-          </div>
-        </div>
+  function removeH(id) { setHoldings(prev => prev.filter(h => h.id !== id)); }
 
-        {/* Messages */}
-        <div style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column",gap:14,padding:"2px 0"}}>
-          {msgs.map((m,i)=>{
-            const model=AI_MODELS[m.model]||AI_MODELS["GPT-4o-mini"];
-            return(
-              <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                <div style={{
-                  background:m.role==="user"?"#12142a":"#0b0d1e",
-                  border:`1px solid ${m.role==="user"?"#252a50":T.border}`,
-                  borderRadius:m.role==="user"?"14px 14px 3px 14px":"14px 14px 14px 3px",
-                  padding:"14px 18px",maxWidth:"82%",fontSize:13,lineHeight:1.78,color:T.text,
-                }}>
-                  {m.role==="assistant"&&(
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                      <span style={{width:7,height:7,borderRadius:"50%",background:model.color,display:"inline-block"}}/>
-                      <span style={{fontSize:9,color:model.color,letterSpacing:2.5,fontWeight:700}}>{model.badge} {m.model||"AI"} FINANCIAL ANALYST</span>
-                      <Chip color={model.color} style={{marginLeft:4}}>Free</Chip>
-                    </div>
-                  )}
-                  <div style={{whiteSpace:"pre-wrap"}}>{m.content}</div>
-                </div>
+  function addH() {
+    nextId.current++;
+    setHoldings(prev => [...prev, { id: nextId.current, s: "NEW", pct: 5, ret: "0.10", vol: "0.15" }]);
+  }
+
+  const total    = holdings.reduce((a, h) => a + h.pct, 0);
+  const portRet  = holdings.reduce((a, h) => a + h.pct / 100 * (+h.ret || 0), 0);
+  const portVol  = Math.sqrt(holdings.reduce((a, h) => a + (h.pct / 100 * (+h.vol || 0)) ** 2, 0));
+  const sharpe   = portVol > 0 ? ((portRet - 0.0525) / portVol).toFixed(2) : "—";
+  const investAmt = +invest || 50000;
+
+  const projData = [1, 2, 3, 5, 10, 15, 20].map(yr => ({
+    yr: `${yr}Y`,
+    bull: Math.round(investAmt * Math.pow(1 + portRet + portVol * 0.7, yr)),
+    base: Math.round(investAmt * Math.pow(1 + portRet, yr)),
+    bear: Math.round(investAmt * Math.pow(Math.max(0.01, 1 + portRet - portVol * 0.5), yr)),
+  }));
+
+  const ageNum   = +age || 32;
+  const startY   = Math.max(2009, 2025 - ageNum + 18);
+  const tfsaRoom = Math.max(0, Object.entries(TFSA_LIMITS).filter(([y]) => +y >= startY && +y <= 2025).reduce((s, [, v]) => s + v, 0) - (+eTFSA || 0));
+  const rrspRoom = Math.max(0, Math.min(31560, Math.round((+income || 0) * 0.18)) - (+eRRSP || 0));
+
+  return (
+    <div style={{ padding: 10, display: "grid", gridTemplateColumns: "380px 1fr", gap: 10, alignItems: "start" }}>
+      {/* Left inputs */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <Panel>
+          <Lbl>Canadian Tax Profile</Lbl>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div><Lbl>Age</Lbl><input value={age} onChange={e => setAge(e.target.value)} style={iSt} type="number" /></div>
+            <div>
+              <Lbl>Province</Lbl>
+              <select value={province} onChange={e => setProv(e.target.value)} style={sSt}>
+                {["Ontario", "British Columbia", "Alberta", "Quebec", "Manitoba", "Saskatchewan", "Nova Scotia", "New Brunswick", "Newfoundland"].map(p => <option key={p}>{p}</option>)}
+              </select>
+            </div>
+            <div><Lbl>Annual Income (CAD $)</Lbl><input value={income} onChange={e => setIncome(e.target.value)} style={iSt} type="number" /></div>
+            <div><Lbl>Total Investment ($)</Lbl><input value={invest} onChange={e => setInvest(e.target.value)} style={iSt} type="number" /></div>
+            <div><Lbl>Existing TFSA ($)</Lbl><input value={eTFSA} onChange={e => setETFSA(e.target.value)} style={iSt} type="number" /></div>
+            <div><Lbl>Existing RRSP ($)</Lbl><input value={eRRSP} onChange={e => setERRSP(e.target.value)} style={iSt} type="number" /></div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+            <div style={{ background: BG3, padding: "8px", border: `1px solid ${G}30`, textAlign: "center" }}>
+              <Lbl>TFSA Room Available</Lbl>
+              <div style={{ fontFamily: MN, fontWeight: 700, color: G, fontSize: 15 }}>${tfsaRoom.toLocaleString()}</div>
+            </div>
+            <div style={{ background: BG3, padding: "8px", border: `1px solid ${AM}30`, textAlign: "center" }}>
+              <Lbl>RRSP Deduction Room</Lbl>
+              <div style={{ fontFamily: MN, fontWeight: 700, color: AM, fontSize: 15 }}>${rrspRoom.toLocaleString()}</div>
+            </div>
+          </div>
+        </Panel>
+
+        <Panel>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <Lbl>Portfolio Holdings</Lbl>
+            <span style={{ fontFamily: MN, fontSize: 11, color: total === 100 ? G : R, fontWeight: 700 }}>Total: {total}%</span>
+          </div>
+          {holdings.map((h, i) => (
+            <div key={h.id} style={{ background: BG2, padding: "8px 10px", marginBottom: 6, borderLeft: `3px solid ${PCOLS[i % PCOLS.length]}` }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
+                <input
+                  value={h.s}
+                  onChange={e => updateH(h.id, "s", e.target.value)}
+                  style={{ ...iSt, width: 80, color: PCOLS[i % PCOLS.length], fontWeight: 700 }}
+                />
+                <input
+                  type="number" min="0" max="100"
+                  value={h.pct}
+                  onChange={e => updateH(h.id, "pct", e.target.value)}
+                  style={{ ...iSt, width: 55 }}
+                />
+                <span style={{ fontSize: 10, color: MU }}>%</span>
+                <button onClick={() => removeH(h.id)}
+                  style={{ marginLeft: "auto", background: R + "22", color: R, border: `1px solid ${R}44`, fontSize: 13, cursor: "pointer", padding: "0px 7px", lineHeight: "20px", fontFamily: MN }}>×</button>
               </div>
-            );
-          })}
-          {aiLoading&&(
-            <div style={{display:"flex"}}>
-              <div style={{background:"#0b0d1e",border:`1px solid ${T.border}`,borderRadius:"14px 14px 14px 3px",padding:"14px 18px"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                  <Spinner color={AI_MODELS[aiModel]?.color||T.purple} size={10}/>
-                  <span style={{fontSize:9,color:AI_MODELS[aiModel]?.color||T.purple,letterSpacing:2.5,fontWeight:700}}>{AI_MODELS[aiModel]?.badge} {aiModel} · ANALYZING…</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <div style={{ flex: 1 }}>
+                  <Lbl>Exp. Return/yr</Lbl>
+                  <input
+                    type="number" step="0.01"
+                    value={h.ret}
+                    onChange={e => updateH(h.id, "ret", e.target.value)}
+                    style={{ ...iSt, color: G }}
+                  />
                 </div>
-                <span style={{color:T.muted,animation:"blink 1.2s infinite",fontSize:13}}>Thinking through your question with live market context…</span>
+                <div style={{ flex: 1 }}>
+                  <Lbl>Volatility/yr</Lbl>
+                  <input
+                    type="number" step="0.01"
+                    value={h.vol}
+                    onChange={e => updateH(h.id, "vol", e.target.value)}
+                    style={{ ...iSt, color: R }}
+                  />
+                </div>
               </div>
             </div>
-          )}
-          <div ref={aiEnd}/>
+          ))}
+          <button onClick={addH}
+            style={{ width: "100%", background: BG2, color: MU, border: `1px solid ${BD2}`, fontSize: 10, padding: "7px", cursor: "pointer", fontFamily: MN, letterSpacing: 1, marginTop: 4 }}>
+            + ADD POSITION
+          </button>
+        </Panel>
+      </div>
+
+      {/* Right: stats + charts */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+          {[["Expected Return", (portRet * 100).toFixed(1) + "%", G], ["Portfolio Volatility", (portVol * 100).toFixed(1) + "%", R], ["Sharpe Ratio", sharpe, +sharpe >= 1 ? G : +sharpe >= 0.5 ? AM : R]].map(([l, v, col]) => (
+            <Panel key={l} style={{ textAlign: "center", padding: 12 }}>
+              <Lbl>{l}</Lbl>
+              <div style={{ fontFamily: MN, fontWeight: 800, fontSize: 22, color: col }}>{v}</div>
+            </Panel>
+          ))}
         </div>
 
-        {/* Input */}
-        <div style={{display:"flex",gap:10,flexShrink:0}}>
-          <input style={{flex:1,background:T.bg1,border:`1px solid ${T.border}`,borderRadius:10,padding:"14px 18px",color:T.text,fontSize:13,fontFamily:T.sans}} value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter"&&!e.shiftKey)sendMsg();}} placeholder={`Ask ${aiModel} anything — crypto, NFT alpha, fund picks, TFSA/RRSP strategy, portfolio advice…`} disabled={aiLoading}/>
-          <button onClick={sendMsg} disabled={aiLoading||!aiInput.trim()} style={{background:AI_MODELS[aiModel]?.color+"22",color:AI_MODELS[aiModel]?.color||T.purple,border:`1px solid ${(AI_MODELS[aiModel]?.color||T.purple)+"44"}`,padding:"14px 28px",borderRadius:10,fontWeight:800,fontSize:14,minWidth:110}}>
-            {aiLoading?<Spinner color={AI_MODELS[aiModel]?.color} size={18}/>:"SEND ↵"}
-          </button>
-        </div>
+        <Panel>
+          <Lbl>Allocation Breakdown</Lbl>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <ResponsiveContainer width={180} height={180}>
+              <PieChart>
+                <Pie data={holdings.map((h, i) => ({ name: h.s, value: h.pct, color: PCOLS[i % PCOLS.length] }))}
+                  dataKey="value" cx="50%" cy="50%" innerRadius={44} outerRadius={80} paddingAngle={2} isAnimationActive={false}>
+                  {holdings.map((_, i) => <Cell key={i} fill={PCOLS[i % PCOLS.length]} />)}
+                </Pie>
+                <Tooltip formatter={v => v + "%"} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ flex: 1 }}>
+              {holdings.map((h, i) => (
+                <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 8, height: 8, background: PCOLS[i % PCOLS.length], flexShrink: 0 }} />
+                    <span style={{ fontFamily: MN, fontSize: 11, color: WH, fontWeight: 700 }}>{h.s}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, fontSize: 11, fontFamily: MN }}>
+                    <span style={{ color: MU }}>{h.pct}%</span>
+                    <span style={{ color: G }}>R:{(+h.ret * 100).toFixed(0)}%</span>
+                    <span style={{ color: R }}>σ:{(+h.vol * 100).toFixed(0)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel>
+          <Lbl>Wealth Projection — Bull / Base / Bear Scenarios</Lbl>
+          <ResponsiveContainer width="100%" height={190}>
+            <AreaChart data={projData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+              <XAxis dataKey="yr" tick={{ fill: MU, fontSize: 10, fontFamily: MN }} />
+              <YAxis tick={{ fill: MU, fontSize: 9, fontFamily: MN }} tickFormatter={v => "$" + Math.round(v / 1000) + "k"} width={52} />
+              <Tooltip formatter={(v, n) => ["$" + v.toLocaleString(), n]} />
+              <Area type="monotone" dataKey="bull" stroke={G} strokeWidth={1.5} fill={G} fillOpacity={0.07} name="Bull" isAnimationActive={false} />
+              <Area type="monotone" dataKey="base" stroke={AM} strokeWidth={2} fill={AM} fillOpacity={0.07} name="Base" isAnimationActive={false} />
+              <Area type="monotone" dataKey="bear" stroke={R} strokeWidth={1.5} fill={R} fillOpacity={0.06} name="Bear" isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, marginTop: 8 }}>
+            {projData.filter((_, i) => [1, 2, 4, 6].includes(i)).map(d => (
+              <div key={d.yr} style={{ background: BG3, padding: "8px", textAlign: "center" }}>
+                <Lbl>{d.yr}</Lbl>
+                <div style={{ fontFamily: MN, fontSize: 13, color: G, fontWeight: 700 }}>${Math.round(d.base / 1000)}k</div>
+                <div style={{ fontSize: 9, color: MU }}>{((d.base / investAmt - 1) * 100).toFixed(0)}%</div>
+              </div>
+            ))}
+          </div>
+        </Panel>
       </div>
-    );
+    </div>
+  );
+});
+
+/* ─────────────────────────────────────────
+   ROOT APP
+   Clock is isolated — never causes re-render
+   No key={tab} — preserves tab state
+───────────────────────────────────────── */
+export default function App() {
+  const [tab,   setTab]   = useState("terminal");
+  const [asset, setAsset] = useState(ALL_ASSETS[8]); // AAPL default
+
+  function selectAsset(a) {
+    setAsset(a);
+    setTab("terminal");
   }
 
-  /* ══════════════════════════════════════════════════════════
-     NAVIGATION & LAYOUT
-  ══════════════════════════════════════════════════════════ */
-  const TABS=[
-    {id:"overview",  label:"Overview",     icon:"◈"},
-    {id:"markets",   label:"Markets",      icon:"◉"},
-    {id:"forecast",  label:"Forecast",     icon:"◎"},
-    {id:"nft",       label:"NFT",          icon:"◆"},
-    {id:"funds",     label:"Funds",        icon:"◇"},
-    {id:"upcoming",  label:"Upcoming",     icon:"◎"},
-    {id:"sentiment", label:"Sentiment",    icon:"◐"},
-    {id:"portfolio", label:"Portfolio AI", icon:"🤖"},
-    {id:"compare",   label:"AI Compare",   icon:"🆚"},
-    {id:"ai",        label:"AI Analyst",   icon:"⚡"},
+  const TABS = [
+    { id: "terminal",  label: "TERMINAL"  },
+    { id: "screener",  label: "SCREENER"  },
+    { id: "analytics", label: "ANALYTICS" },
+    { id: "options",   label: "OPTIONS"   },
+    { id: "forex",     label: "FOREX"     },
+    { id: "portfolio", label: "PORTFOLIO" },
   ];
 
-  const VIEWS={
-    overview:<OverviewTab/>, markets:<MarketsTab/>, forecast:<ForecastTab/>,
-    explorer:<ExplorerTab/>,
-    sentiment:<SentimentTab/>, portfolio:<PortfolioTab/>,
-    compare:<CompareTab/>, ai:<AITab/>,
-  };
+  return (
+    <div style={{ minHeight: "100vh", background: BG, color: WH, fontFamily: MN, fontSize: 12 }}>
+      <style>{`
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+        html,body,#root{height:100%;background:${BG};}
+        ::-webkit-scrollbar{width:5px;height:5px;}
+        ::-webkit-scrollbar-track{background:${BG1};}
+        ::-webkit-scrollbar-thumb{background:${BD2};border-radius:2px;}
+        button{cursor:pointer;font-family:'Courier New',Courier,monospace;transition:opacity .1s;}
+        button:hover:not(:disabled){opacity:.8;}
+        input,select{outline:none;font-family:'Courier New',Courier,monospace;}
+        input:focus,select:focus{border-color:${AM}!important;}
+        @keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+      `}</style>
 
-  const tickItems=CRYPTOS.slice(0,12).map(c=>({s:c.s,p:`$${c.p.toLocaleString()}`,c:c.c}));
-
-  return(
-    <div style={{minHeight:"100vh",background:T.bg0,color:T.text,fontFamily:T.sans,display:"flex",flexDirection:"column"}}>
-      <style>{GCSS}</style>
-
-      {/* ── HEADER ── */}
-      <header style={{background:T.bg1+"ee",borderBottom:`1px solid ${T.border}`,padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52,position:"sticky",top:0,zIndex:300,backdropFilter:"blur(24px)"}}>
-        {/* Logo */}
-        <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#4ade80,#06b6d4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#060710",fontFamily:T.mono}}>F</div>
-          <div>
-            <div style={{fontSize:15,fontWeight:900,letterSpacing:-.4,fontFamily:T.mono,lineHeight:1}}><span style={{color:T.green}}>FIN</span>PULSE</div>
-            <div style={{fontSize:8,color:T.muted,letterSpacing:2.5}}>AI FINANCIAL ANALYTICS</div>
+      {/* Top bar — Clock is isolated component, never triggers App re-render */}
+      <div style={{ height: 32, background: BG1, borderBottom: `1px solid ${BD}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 12, borderRight: `1px solid ${BD}`, marginRight: 0 }}>
+            <div style={{ width: 16, height: 16, background: AM, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 900, color: BG }}>F</div>
+            <span style={{ fontSize: 11, fontWeight: 800, color: AM, letterSpacing: 2 }}>FINPULSE</span>
+            <span style={{ fontSize: 8, color: MU, letterSpacing: 1 }}>v6</span>
           </div>
-        </div>
-
-        {/* Nav */}
-        <nav style={{display:"flex",gap:1,overflow:"auto",flexShrink:1}}>
-          {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{
-              background:tab===t.id?"#12162e":"transparent",
-              color:tab===t.id?(t.id==="portfolio"?T.green:t.id==="compare"?T.pink:t.id==="ai"?T.purple:T.blue):T.muted,
-              border:`1px solid ${tab===t.id?"#252a50":"transparent"}`,
-              padding:"5px 11px",borderRadius:7,fontSize:11,fontWeight:tab===t.id?700:400,whiteSpace:"nowrap",
-            }}>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              style={{ padding: "0 14px", height: 32, background: tab === t.id ? BG3 : BG1, color: tab === t.id ? AM : MU, border: "none", borderRight: `1px solid ${BD}`, fontSize: 9, letterSpacing: 2, fontWeight: tab === t.id ? 700 : 400 }}>
               {t.label}
             </button>
           ))}
-        </nav>
-
-        {/* Live price chip */}
-        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-          <div style={{background:priceCol+"10",border:`1px solid ${priceCol}28`,borderRadius:9,padding:"5px 11px",display:"flex",alignItems:"center",gap:7}}>
-            <div style={{width:7,height:7,borderRadius:"50%",background:priceCol,animation:"pulse 2s infinite"}}/>
-            <span style={{fontSize:13,fontFamily:T.mono,color:priceCol,fontWeight:700}}>${price.toLocaleString()}</span>
-            <span style={{fontSize:8,color:T.muted,letterSpacing:1.5}}>BTC · <span ref={cdRef2}>90s</span></span>
-          </div>
         </div>
-      </header>
-
-      {/* ── TICKER ── */}
-      <TickerTape items={tickItems}/>
-
-      {/* ── BODY ── */}
-      <main style={{flex:1,overflow:"auto",padding:"22px 24px"}}>
-        {VIEWS[tab]}
-      </main>
-
-      {/* ── FOOTER ── */}
-      <footer style={{background:T.bg1,borderTop:`1px solid ${T.border}`,padding:"10px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,fontSize:11,color:T.muted}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{color:T.green,fontWeight:700,fontFamily:T.mono}}>FinPulse v3</span>
-          <span>·</span>
-          <span>Crypto · NFT · Funds · Forecasts · Portfolio AI · Model Compare</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 9 }}>
+          <span style={{ color: G, animation: "blink 2s step-end infinite" }}>● LIVE</span>
+          {ALL_ASSETS.slice(0, 5).map(a => (
+            <span key={a.s} style={{ borderLeft: `1px solid ${BD}`, paddingLeft: 10 }}>
+              <span style={{ color: MU }}>{a.s} </span>
+              <span style={{ color: WH, fontWeight: 700 }}>{fmtPrice(a.p)} </span>
+              <span style={{ color: a.c > 0 ? G : R }}>{a.c > 0 ? "+" : ""}{a.c}%</span>
+            </span>
+          ))}
+          <Clock />
         </div>
-        <div style={{display:"flex",gap:14,fontFamily:T.mono}}>
-          {[`BTC $${price.toLocaleString()}`,`ETH $3,612`,`SOL $184`,"F&G: 68 Greed"].map(t=><span key={t}>{t}</span>)}
+      </div>
+
+      {/* Ticker tape */}
+      <div style={{ height: 22, background: BG2, borderBottom: `1px solid ${BD}`, overflow: "hidden", display: "flex", alignItems: "center" }}>
+        <div style={{ display: "flex", animation: "ticker 55s linear infinite", whiteSpace: "nowrap" }}>
+          {[...ALL_ASSETS, ...ALL_ASSETS].map((a, i) => (
+            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 14px", fontSize: 10, borderRight: `1px solid ${BD}` }}>
+              <span style={{ color: MU }}>{a.s}</span>
+              <span style={{ color: WH, fontWeight: 700 }}>{fmtPrice(a.p)}</span>
+              <span style={{ color: a.c >= 0 ? G : R }}>{a.c >= 0 ? "▲" : "▼"}{Math.abs(a.c)}%</span>
+            </span>
+          ))}
         </div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          <Chip color={T.green}>React</Chip>
-          <Chip color={T.blue}>Recharts</Chip>
-          <Chip color={AI_MODELS["GPT-4o"].color}>GPT-4o</Chip>
-          <Chip color={AI_MODELS["Gemini Flash"].color}>Gemini</Chip>
-          <Chip color={AI_MODELS["Mistral"].color}>Mistral</Chip>
-          <Chip color={AI_MODELS["Llama 3.3"].color}>Llama</Chip>
-          <Chip color={T.teal}>TFSA/RRSP</Chip>
+      </div>
+
+      {/* Asset selector bar — terminal only */}
+      {tab === "terminal" && (
+        <div style={{ height: 26, background: BG1, borderBottom: `1px solid ${BD}`, display: "flex", alignItems: "center", padding: "0 6px", gap: 2, overflowX: "auto" }}>
+          {ALL_ASSETS.map(a => (
+            <button key={a.s} onClick={() => setAsset(a)}
+              style={{ padding: "2px 9px", height: 20, background: asset.s === a.s ? BG3 : "transparent", color: asset.s === a.s ? AM : MU, border: asset.s === a.s ? `1px solid ${BD2}` : "1px solid transparent", fontSize: 9, whiteSpace: "nowrap", fontWeight: asset.s === a.s ? 700 : 400 }}>
+              {a.s}
+            </button>
+          ))}
         </div>
-      </footer>
+      )}
+
+      {/* Tab content — NO key prop, state is preserved */}
+      <div style={{ display: tab === "terminal"  ? "block" : "none" }}><TabTerminal  asset={asset} /></div>
+      <div style={{ display: tab === "screener"  ? "block" : "none" }}><TabScreener  onSelectAsset={selectAsset} /></div>
+      <div style={{ display: tab === "analytics" ? "block" : "none" }}><TabAnalytics /></div>
+      <div style={{ display: tab === "options"   ? "block" : "none" }}><TabOptions   asset={asset} /></div>
+      <div style={{ display: tab === "forex"     ? "block" : "none" }}><TabForex /></div>
+      <div style={{ display: tab === "portfolio" ? "block" : "none" }}><TabPortfolio /></div>
     </div>
   );
 }
